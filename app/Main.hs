@@ -1,10 +1,17 @@
+{-# LANGUAGE ForeignFunctionInterface #-}
 module Main where
 
 import Music (Note (..), Scale (..), ScaleType (..), notes, inScale)
 import Data.Char (chr)
+import Foreign.C.Types
 import System.Console.ANSI
 import Control.Monad (when)
 import Control.Applicative (ZipList (..), (<$>), (<*>))
+import System.IO (hSetEcho, stdin, hSetBuffering, stdout, BufferMode (..))
+
+getHiddenChar = fmap (chr.fromEnum) c_getch
+foreign import ccall unsafe "conio.h getch"
+  c_getch :: IO CInt
 
 f = [ "│  │░░░░││░░░░│ │ │░░░░││░░░░││░░░│ │  │░░░░││░░░░│ │ │░░░░││░░░░││░░░│ │"
     , "│  │░C#░││░Eb░│ │ │░F#░││░Ab░││░Bb│ │  │░C#░││░Eb░│ │ │░F#░││░Ab░││░Bb│ │"
@@ -195,6 +202,34 @@ displaySharedNotes (x, y) ns prev this next = do
       (True, True, _, True)       -> setColor (Col Vivid Red   Dull Red)
       (_, True, True, True)       -> setColor (Col Vivid Red   Dull Red)
 
+displayCursor :: Pos -> IO ()
+displayCursor (x, y) = do
+  setCursorPosition y x >> setColor (Col Vivid White Vivid White) >> putStr "%" >> setColor defaultColor
+
+clearCursor :: Pos -> IO ()
+clearCursor (x, y) = do
+  setCursorPosition y x >> setColor (Col Dull Black Dull Black) >> putStr "%"  >> setColor defaultColor
+  
+data State = State { cursor :: Pos
+                   , cursorMin :: Pos
+                   , cursorMax :: Pos
+                   }
+
+respondToInput' :: State -> IO ()
+respondToInput' state@State {cursor = old@(x, y), cursorMin = (minx, miny), cursorMax = (maxx, maxy)} = do
+  c <- getHiddenChar
+  case c of
+    'k' -> let new = (max (x - 1) minx, y) in (moveCursor' old new) >> (respondToInput' state{cursor = new})
+    ';' -> let new = (min (x + 1) maxx, y) in (moveCursor' old new) >> (respondToInput' state{cursor = new})
+    'o' -> let new = (x, max (y - 1) miny) in (moveCursor' old new) >> (respondToInput' state{cursor = new})
+    'l' -> let new = (x, min (y + 1) maxy) in (moveCursor' old new) >> (respondToInput' state{cursor = new})
+    'q' -> return ()
+    _   -> respondToInput' state
+    where
+      moveCursor' :: Pos -> Pos -> IO ()
+      moveCursor' old' new' = when (new' /= old') $ displayCursor new' >> clearCursor old'
+
+
 main :: IO ()
 main = do
   setSGR [Reset] >> clearScreen >> setCursorPosition 0 0
@@ -203,3 +238,11 @@ main = do
   displaySharedNotes (2, 11) (take 24 $ cycle notes) (Just $ Scale G Minor) (Scale A Diminished) (Just $ Scale Bb Major)
   displaySharedNotes (2, 13) (take 24 $ cycle notes) (Just $ Scale A Diminished) (Scale Bb Major) Nothing
   setCursorPosition 15 0
+  hSetEcho stdin False
+  hSetBuffering stdin NoBuffering
+  hSetBuffering stdout NoBuffering
+  let (startX, startY) = (24 * 3 + 10, 9)
+  respondToInput' State { cursor = (startX, startY)
+                        , cursorMin = (startX, startY)
+                        , cursorMax = (startX + 5, startY + 5)
+                        }
