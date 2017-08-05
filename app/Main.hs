@@ -234,9 +234,9 @@ main :: IO ()
 main = do
   setSGR [Reset] >> clearScreen >> setCursorPosition 0 0
   drawKeys (1, 1) keys
-  displaySharedNotes (2, 9) (take 24 $ cycle notes) Nothing (Scale G Minor) (Just $ Scale A Diminished)
-  displaySharedNotes (2, 11) (take 24 $ cycle notes) (Just $ Scale G Minor) (Scale A Diminished) (Just $ Scale Bb Major)
-  displaySharedNotes (2, 13) (take 24 $ cycle notes) (Just $ Scale A Diminished) (Scale Bb Major) Nothing
+  let progression = [(Scale G Minor), (Scale A Diminished), (Scale Bb Major), (Scale Fs Minor), (Scale A Major), (Scale C WholeTone)]
+  let keyNotes = (take 24 $ cycle notes)
+  displayRows keyNotes (2, 9) progression
   setCursorPosition 15 0
   hSetEcho stdin False
   hSetBuffering stdin NoBuffering
@@ -246,3 +246,28 @@ main = do
                         , cursorMin = (startX, startY)
                         , cursorMax = (startX + 5, startY + 5)
                         }
+    where
+      displayRows :: [Note] -> Pos -> [Scale] -> IO ()
+      displayRows ns pos (a:b:ss) = do
+        displayRows' pos Nothing a (Just b) ss where
+          displayRows' :: Pos -> Maybe Scale -> Scale -> Maybe Scale -> [Scale] -> IO ()
+          displayRows' (x, y) ms1 s2 ms3@Nothing [] = do
+            displayRow (x, y) ms1 s2 ms3
+          displayRows' (x, y) ms1 s2 ms3@(Just s3) [] = do
+            displayRow (x, y) ms1 s2 ms3
+            displayRows' (x, y + 2) (Just s2) s3 Nothing []
+          displayRows' (x, y) ms1 s2 ms3@(Just s3) (s4:scs) = do
+            displayRow (x, y) ms1 s2 ms3
+            displayRows' (x, y + 2) (Just s2) s3 (Just s4) scs
+          displayRows' _ _ _ _ _ = return ()
+
+          displayRow :: Pos -> Maybe Scale -> Scale -> Maybe Scale -> IO ()
+          displayRow (x, y) s1 s2 s3 = do
+            displaySharedNotes (x, y) ns s1 s2 s3
+            setCursorPosition y (x + (24*3 + 2)) >> putStr (show s2)
+      displayRows _ _ _ = return ()
+
+      
+        
+          
+          
