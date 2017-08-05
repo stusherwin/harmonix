@@ -29,9 +29,6 @@ replace a b = map (\c -> if c == a then b else c)
 type Key = (Note, Bool)
 type Pos = (Int, Int)
 
-keys :: [Key]                     --  C    C#   D    Eb   E    F    F#   G    Ab   A    Bb   B
-keys = zip (take 24 $ cycle notes) $ True:True:True:True:True:True:True:True:True:True:True:False:True:(repeat False)
-
 downArrow :: String
 downArrow = [chr 0x19]
 upArrow :: String
@@ -213,40 +210,62 @@ clearCursor (x, y) = do
 data State = State { cursor :: Pos
                    , cursorMin :: Pos
                    , cursorMax :: Pos
+                   , quit :: Bool
+                   , progression :: [Scale]
+                   , keys :: [Key]
                    }
 
-respondToInput' :: State -> IO ()
-respondToInput' state@State {cursor = old@(x, y), cursorMin = (minx, miny), cursorMax = (maxx, maxy)} = do
+respondToInput' :: State -> IO State
+respondToInput' state = do
   c <- getHiddenChar
-  case c of
-    'k' -> let new = (max (x - 1) minx, y) in (moveCursor' old new) >> (respondToInput' state{cursor = new})
-    ';' -> let new = (min (x + 1) maxx, y) in (moveCursor' old new) >> (respondToInput' state{cursor = new})
-    'o' -> let new = (x, max (y - 1) miny) in (moveCursor' old new) >> (respondToInput' state{cursor = new})
-    'l' -> let new = (x, min (y + 1) maxy) in (moveCursor' old new) >> (respondToInput' state{cursor = new})
-    'q' -> return ()
-    _   -> respondToInput' state
-    where
-      moveCursor' :: Pos -> Pos -> IO ()
-      moveCursor' old' new' = when (new' /= old') $ displayCursor new' >> clearCursor old'
-
+  let newState = case c of
+                 'k' -> moveCursor' state ((subtract 1), id)
+                 ';' -> moveCursor' state ((+ 1),        id)
+                 'o' -> moveCursor' state (id,           (subtract 1))
+                 'l' -> moveCursor' state (id,           (+ 1))
+                 'q' -> state{quit = True}
+                 _   -> state
+  return newState where
+    moveCursor' :: State -> (Int -> Int, Int -> Int) -> State
+    moveCursor' State {cursor = old', cursorMin = (minx, miny), cursorMax = (maxx, maxy)} delta = do
+      let new' = (min maxx $ max minx $ (fst delta) (fst old'), min maxy $ max miny $ (snd delta) (snd old'))
+      state{cursor = new'}
 
 main :: IO ()
 main = do
-  setSGR [Reset] >> clearScreen >> setCursorPosition 0 0
-  drawKeys (1, 1) keys
-  let progression = [(Scale G Minor), (Scale A Diminished), (Scale Bb Major), (Scale Fs Minor), (Scale A Major), (Scale C WholeTone)]
-  let keyNotes = (take 24 $ cycle notes)
-  displayRows keyNotes (2, 9) progression
-  setCursorPosition 15 0
   hSetEcho stdin False
   hSetBuffering stdin NoBuffering
   hSetBuffering stdout NoBuffering
+  setSGR [Reset] >> clearScreen >> setCursorPosition 0 0
   let (startX, startY) = (24 * 3 + 10, 9)
-  respondToInput' State { cursor = (startX, startY)
+  let initState = State { cursor = (startX, startY)
                         , cursorMin = (startX, startY)
                         , cursorMax = (startX + 5, startY + 5)
+                        , quit = False
+                        , progression = [(Scale G Minor), (Scale A Diminished), (Scale Bb Major), (Scale Fs Minor), (Scale A Major), (Scale C WholeTone)]
+                        , keys = zip (take 24 $ cycle notes) $ True:True:True:True:True:True:True:True:True:True:True:False:True:(repeat False)
                         }
+  
+  drawKeys (1, 1) (keys initState)
+  display' Nothing initState
+  interact' initState
     where
+      interact' :: State -> IO()
+      interact' state = do
+        newState <- respondToInput' state
+        when ((not . quit) newState) $ do
+          display' (Just state) newState
+          interact' newState
+      
+      display' :: Maybe State -> State -> IO ()
+      display' (Just old) new = do
+        when (progression new /= progression old) $ displayRows (map fst (keys new)) (2, 9) (progression new)
+        when (cursor new /= cursor old) $ displayCursor (cursor new) >> clearCursor (cursor old)
+
+      display' Nothing new = do
+        displayRows (map fst (keys new)) (2, 9) (progression new)
+        displayCursor (cursor new)
+      
       displayRows :: [Note] -> Pos -> [Scale] -> IO ()
       displayRows ns pos (a:b:ss) = do
         displayRows' pos Nothing a (Just b) ss where
@@ -266,8 +285,3 @@ main = do
             displaySharedNotes (x, y) ns s1 s2 s3
             setCursorPosition y (x + (24*3 + 2)) >> putStr (show s2)
       displayRows _ _ _ = return ()
-
-      
-        
-          
-          
