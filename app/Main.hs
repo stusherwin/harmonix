@@ -8,6 +8,7 @@ import System.Console.ANSI
 import Control.Monad (when)
 import Control.Applicative (ZipList (..), (<$>), (<*>))
 import System.IO (hSetEcho, stdin, hSetBuffering, stdout, BufferMode (..))
+import Data.List (findIndex, last)
 
 getHiddenChar = fmap (chr.fromEnum) c_getch
 foreign import ccall unsafe "conio.h getch"
@@ -25,6 +26,13 @@ pad width str = str ++ (take (subtract (length str) width) $ repeat ' ')
 
 replace :: Char -> Char -> String -> String
 replace a b = map (\c -> if c == a then b else c)
+
+rotate :: Int -> [a] -> [a]
+rotate _ [] = []
+rotate _ [x] = [x]
+rotate n (x:xs) | n < 0     = rotate (n + 1) $ last xs : x : init xs
+                | n > 0     = rotate (n - 1) $ xs ++ [x]
+                | otherwise = x:xs
 
 type Key = (Note, Bool)
 type Pos = (Int, Int)
@@ -207,29 +215,51 @@ clearCursor :: Pos -> IO ()
 clearCursor (x, y) = do
   setCursorPosition y x >> setColor (Col Dull Black Dull Black) >> putStr "%"  >> setColor defaultColor
   
+data ProgressionStep = Step { scales :: [Scale]
+                            , editing :: Bool
+                            } deriving (Eq, Show)
 data State = State { cursor :: Pos
                    , cursorMin :: Pos
                    , cursorMax :: Pos
-                   , quit :: Bool
-                   , progression :: [Scale]
+                   , quitting :: Bool
+                   , progression :: [ProgressionStep]
                    , keys :: [Key]
-                   }
+                   } deriving (Eq, Show)
 
 respondToInput' :: State -> IO State
 respondToInput' state = do
   c <- getHiddenChar
   let newState = case c of
-                 'k' -> moveCursor' state ((subtract 1), id)
-                 ';' -> moveCursor' state ((+ 1),        id)
-                 'o' -> moveCursor' state (id,           (subtract 1))
-                 'l' -> moveCursor' state (id,           (+ 1))
-                 'q' -> state{quit = True}
+                 'a' -> moveCursor' state ((subtract 1), id)
+                 'd' -> moveCursor' state ((+ 1),        id)
+                 'w' -> moveCursor' state (id,           (subtract 1))
+                 's' -> moveCursor' state (id,           (+ 1))
+                 'o' -> moveScale' state (subtract 1)
+                 'l' -> moveScale' state (+ 1)
+                 'k' -> rotateScale' state (- 1)
+                 ';' -> rotateScale' state 1
+                 'q' -> state{quitting = True}
                  _   -> state
   return newState where
     moveCursor' :: State -> (Int -> Int, Int -> Int) -> State
-    moveCursor' State {cursor = old', cursorMin = (minx, miny), cursorMax = (maxx, maxy)} delta = do
+    moveCursor' State {cursor = old', cursorMin = (minx, miny), cursorMax = (maxx, maxy)} delta =
       let new' = (min maxx $ max minx $ (fst delta) (fst old'), min maxy $ max miny $ (snd delta) (snd old'))
-      state{cursor = new'}
+      in state{cursor = new'}
+
+    moveScale' :: State -> (Int -> Int) -> State
+    moveScale' State {progression = p} delta =
+      let i = maybe (length p) id $ findIndex editing p
+          i' = (max 0 $ min ((length p) - 1) $ delta i)
+      in  case (i `compare` i', splitAt (min i i') p) of
+            (LT, (pre, (s:s':post))) -> state{progression = pre ++ (s{editing = False}:s'{editing = True}:post)}
+            (GT, (pre, (s':s:post))) -> state{progression = pre ++ (s'{editing = True}:s{editing = False}:post)}
+            _ -> state
+    
+    rotateScale' :: State -> Int -> State
+    rotateScale' State {progression = p} delta =
+      let i = maybe (length p) id $ findIndex editing p
+          (pre, (s@Step{scales = scs}:post)) = splitAt i p
+      in state{progression = pre ++ (s{scales = rotate delta scs}:post)} where
 
 main :: IO ()
 main = do
@@ -237,12 +267,17 @@ main = do
   hSetBuffering stdin NoBuffering
   hSetBuffering stdout NoBuffering
   setSGR [Reset] >> clearScreen >> setCursorPosition 0 0
-  let (startX, startY) = (24 * 3 + 10, 9)
+  let (startX, startY) = (24 * 3 + 30, 9)
   let initState = State { cursor = (startX, startY)
                         , cursorMin = (startX, startY)
                         , cursorMax = (startX + 5, startY + 5)
-                        , quit = False
-                        , progression = [(Scale G Minor), (Scale A Diminished), (Scale Bb Major), (Scale Fs Minor), (Scale A Major), (Scale C WholeTone)]
+                        , quitting = False
+                        , progression = [ Step {scales = [Scale G Minor, Scale C Major, Scale Fs Minor], editing = True}
+                                        , Step {scales = [Scale A Diminished], editing = False}
+                                        , Step {scales = [Scale Bb Major], editing = False}
+                                        , Step {scales = [Scale Fs Minor], editing = False}
+                                        , Step {scales = [Scale A Major], editing = False}
+                                        , Step {scales = [Scale C WholeTone], editing = False}]
                         , keys = zip (take 24 $ cycle notes) $ True:True:True:True:True:True:True:True:True:True:True:False:True:(repeat False)
                         }
   
@@ -253,7 +288,7 @@ main = do
       interact' :: State -> IO()
       interact' state = do
         newState <- respondToInput' state
-        when ((not . quit) newState) $ do
+        when ((not . quitting) newState) $ do
           display' (Just state) newState
           interact' newState
       
@@ -266,22 +301,28 @@ main = do
         displayRows (map fst (keys new)) (2, 9) (progression new)
         displayCursor (cursor new)
       
-      displayRows :: [Note] -> Pos -> [Scale] -> IO ()
-      displayRows ns pos (a:b:ss) = do
-        displayRows' pos Nothing a (Just b) ss where
-          displayRows' :: Pos -> Maybe Scale -> Scale -> Maybe Scale -> [Scale] -> IO ()
-          displayRows' (x, y) ms1 s2 ms3@Nothing [] = do
-            displayRow (x, y) ms1 s2 ms3
-          displayRows' (x, y) ms1 s2 ms3@(Just s3) [] = do
-            displayRow (x, y) ms1 s2 ms3
-            displayRows' (x, y + 2) (Just s2) s3 Nothing []
-          displayRows' (x, y) ms1 s2 ms3@(Just s3) (s4:scs) = do
-            displayRow (x, y) ms1 s2 ms3
-            displayRows' (x, y + 2) (Just s2) s3 (Just s4) scs
-          displayRows' _ _ _ _ _ = return ()
-
-          displayRow :: Pos -> Maybe Scale -> Scale -> Maybe Scale -> IO ()
-          displayRow (x, y) s1 s2 s3 = do
-            displaySharedNotes (x, y) ns s1 s2 s3
-            setCursorPosition y (x + (24*3 + 2)) >> putStr (show s2)
+      displayRows :: [Note] -> Pos -> [ProgressionStep] -> IO ()
+      displayRows ns (xo, yo) (a:b:ss) = do
+        displayScaleNames' (xo + (24*3 + 2), yo) (a:b:ss)
+        displayRows' (xo, yo) Nothing (head $ scales a) (Just $ head $ scales b) ss
+          where
+            displayRows' :: Pos -> Maybe Scale -> Scale -> Maybe Scale -> [ProgressionStep] -> IO ()
+            displayRows' (x, y) ms1 s2 ms3@Nothing [] = do
+              displaySharedNotes (x, y) ns ms1 s2 ms3
+            displayRows' (x, y) ms1 s2 ms3@(Just s3) [] = do
+              displaySharedNotes (x, y) ns ms1 s2 ms3
+              displayRows' (x, y + 2) (Just s2) s3 Nothing []
+            displayRows' (x, y) ms1 s2 ms3@(Just s3) (s4:scs) = do
+              displaySharedNotes (x, y) ns ms1 s2 ms3
+              displayRows' (x, y + 2) (Just s2) s3 (Just $ head $ scales s4) scs
+            displayRows' _ _ _ _ _ = return ()
+  
+            displayScaleNames' :: Pos -> [ProgressionStep] -> IO ()
+            displayScaleNames' _ [] = return ()
+            displayScaleNames' (x, y) (Step{scales = s, editing = e}:ss) = do
+              setCursorPosition y x
+              clearFromCursorToLineEnd
+              if e then setColor (Col Dull Black Vivid White) else setColor (Col Vivid White Dull Black)
+              putStr $ show $ head s
+              displayScaleNames' (x, y + 2) ss
       displayRows _ _ _ = return ()
