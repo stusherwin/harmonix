@@ -118,7 +118,7 @@ data ChordType = Maj | Maj7
                | Dom7 | Dom7b5 | Dom7sh11
                | Min | Min7 | MinMaj7 | Min7b5
                | Alt
-               | Dim
+               | Dim deriving Eq
 
 instance Show ChordType where
   show Maj = ""
@@ -148,7 +148,7 @@ chordScalePositions Dim = [i, fl iii, fl v, vi]
 
 chordTypes = [Maj, Min, Maj7, Dom7, Min7, MinMaj7, Alt, Dim]
 
-data Chord = Chord Note ChordType
+data Chord = Chord Note ChordType deriving Eq
 
 instance Show Chord where
   show (Chord n ct) = show n ++ show ct

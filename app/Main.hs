@@ -216,11 +216,13 @@ clearCursor (x, y) = do
   setCursorPosition y x >> setColor (Col Dull Black Dull Black) >> putStr "%"  >> setColor defaultColor
   
 data ProgressionStep = Step { scales :: [Scale]
-                            , editing :: Bool
-                            } deriving (Eq, Show)
+                            , chord :: Chord
+                            , editingScale :: Bool
+                            , editingChord :: Bool
+                            } deriving Eq
 
 progressionStep :: Chord -> Bool -> ProgressionStep
-progressionStep c e = Step { scales = scalesForChord c, editing = e}
+progressionStep c e = Step { scales = scalesForChord c, chord = c, editingScale = e, editingChord = False }
 
 data State = State { cursor :: Pos
                    , cursorMin :: Pos
@@ -228,7 +230,7 @@ data State = State { cursor :: Pos
                    , quitting :: Bool
                    , progression :: [ProgressionStep]
                    , keys :: [Key]
-                   } deriving (Eq, Show)
+                   } deriving Eq
 
 respondToInput' :: State -> IO State
 respondToInput' state = do
@@ -238,10 +240,11 @@ respondToInput' state = do
                  'd' -> moveCursor' state ((+ 1),        id)
                  'w' -> moveCursor' state (id,           (subtract 1))
                  's' -> moveCursor' state (id,           (+ 1))
-                 'o' -> moveScale' state (subtract 1)
-                 'l' -> moveScale' state (+ 1)
-                 'k' -> rotateScale' state (- 1)
-                 ';' -> rotateScale' state 1
+                 'o' -> moveStep' state (subtract 1)
+                 'l' -> moveStep' state (+ 1)
+                 'k' -> rotateStep' state (- 1)
+                 ';' -> rotateStep' state 1
+                 '\t' -> toggleScaleChord' state
                  'q' -> state{quitting = True}
                  _   -> state
   return newState where
@@ -250,20 +253,28 @@ respondToInput' state = do
       let new' = (min maxx $ max minx $ (fst delta) (fst old'), min maxy $ max miny $ (snd delta) (snd old'))
       in state{cursor = new'}
 
-    moveScale' :: State -> (Int -> Int) -> State
-    moveScale' State {progression = p} delta =
-      let i = maybe (length p) id $ findIndex editing p
+    moveStep' :: State -> (Int -> Int) -> State
+    moveStep' State {progression = p} delta =
+      let i = maybe (length p) id $ findIndex (\x -> editingScale x || editingChord x) p
           i' = (max 0 $ min ((length p) - 1) $ delta i)
       in  case (i `compare` i', splitAt (min i i') p) of
-            (LT, (pre, (s:s':post))) -> state{progression = pre ++ (s{editing = False}:s'{editing = True}:post)}
-            (GT, (pre, (s':s:post))) -> state{progression = pre ++ (s'{editing = True}:s{editing = False}:post)}
+            (LT, (pre, (s@Step{editingScale = True}:s':post))) -> state{progression = pre ++ (s{editingScale = False}:s'{editingScale = True}:post)}
+            (GT, (pre, (s':s@Step{editingScale = True}:post))) -> state{progression = pre ++ (s'{editingScale = True}:s{editingScale = False}:post)}
+            (LT, (pre, (s@Step{editingChord = True}:s':post))) -> state{progression = pre ++ (s{editingChord = False}:s'{editingChord = True}:post)}
+            (GT, (pre, (s':s@Step{editingChord = True}:post))) -> state{progression = pre ++ (s'{editingChord = True}:s{editingChord = False}:post)}
             _ -> state
     
-    rotateScale' :: State -> Int -> State
-    rotateScale' State {progression = p} delta =
-      let i = maybe (length p) id $ findIndex editing p
+    rotateStep' :: State -> Int -> State
+    rotateStep' State {progression = p} delta =
+      let i = maybe (length p) id $ findIndex (\x -> editingScale x || editingChord x) p
           (pre, (s@Step{scales = scs}:post)) = splitAt i p
       in state{progression = pre ++ (s{scales = rotate delta scs}:post)} where
+    
+    toggleScaleChord' :: State -> State
+    toggleScaleChord' State {progression = p} =
+      let i = maybe (length p) id $ findIndex (\x -> editingScale x || editingChord x) p
+          (pre, (s@Step{editingScale = es, editingChord = ec}:post)) = splitAt i p
+      in state{progression = pre ++ (s{editingScale = not es, editingChord = not ec}:post)} where
 
 main :: IO ()
 main = do
@@ -311,6 +322,7 @@ main = do
       displayRows :: [Note] -> Pos -> [ProgressionStep] -> IO ()
       displayRows ns (xo, yo) (a:b:ss) = do
         displayScaleNames' (xo + (24*3 + 2), yo) (a:b:ss)
+        displayChordNames' (xo + (24*3 + 20), yo) (a:b:ss)
         displayRows' (xo, yo) Nothing (head $ scales a) (Just $ head $ scales b) ss
           where
             displayRows' :: Pos -> Maybe Scale -> Scale -> Maybe Scale -> [ProgressionStep] -> IO ()
@@ -326,10 +338,19 @@ main = do
   
             displayScaleNames' :: Pos -> [ProgressionStep] -> IO ()
             displayScaleNames' _ [] = return ()
-            displayScaleNames' (x, y) (Step{scales = s, editing = e}:ss) = do
+            displayScaleNames' (x, y) (Step{scales = s, editingScale = e}:ss) = do
               setCursorPosition y x
               clearFromCursorToLineEnd
               if e then setColor (Col Dull Black Vivid White) else setColor (Col Vivid White Dull Black)
               putStr $ show $ head s
               displayScaleNames' (x, y + 2) ss
+
+            displayChordNames' :: Pos -> [ProgressionStep] -> IO ()
+            displayChordNames' _ [] = return ()
+            displayChordNames' (x, y) (Step{chord = c, editingChord = e}:ss) = do
+              setCursorPosition y x
+              clearFromCursorToLineEnd
+              if e then setColor (Col Dull Black Vivid White) else setColor (Col Vivid White Dull Black)
+              putStr $ show $ c
+              displayChordNames' (x, y + 2) ss
       displayRows _ _ _ = return ()
