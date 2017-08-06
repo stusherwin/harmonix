@@ -1,5 +1,5 @@
 module Music (
-  Note (..), Chord (..), ChordType (..), Scale (..), ScalePosition (..), ScaleType (..),
+  Note (..), Chord (..), ChordType (..), Scale (..), ScaleType (..),
   notes,
   scales,
   chordTypes,
@@ -8,7 +8,7 @@ module Music (
   chordsForNotes,
   scalesForChord,
   scalesForProgression,
-  inScale
+  inScale,
 ) where
 
 import Data.List
@@ -38,8 +38,8 @@ fromNote = maybe 0 id . flip elemIndex notes
 toNote :: Int -> Note
 toNote n = notes !! (n `mod` 12)
 
-data ScalePosition = I | II | III | IV | V | VI | VII | VIII
-  deriving (Show, Eq, Ord)
+-- data ScalePosition = I | II | III | IV | V | VI | VII | VIII
+--   deriving (Show, Eq, Ord)
 
 -- scalePositions = [I, II, III, IV, V, VI, VII, VIII]
 
@@ -57,8 +57,8 @@ data ScaleType = Major | Minor | Diminished | WholeTone
 flatten :: Note -> Note
 flatten = toNote . subtract 1 . fromNote
 
--- sharpen :: Note -> Note
--- sharpen = toNote . (+ 1) . fromNote
+sharpen :: Note -> Note
+sharpen = toNote . (+ 1) . fromNote
 
 scaleIntervals :: ScaleType -> [Int]
 scaleIntervals Major =      [2, 2, 1, 2, 2, 2]
@@ -92,7 +92,7 @@ scaleNotes :: Scale -> [Note]
 scaleNotes (Scale root stype) = scaleNotes' stype root
 
 scaleNote :: Int -> Note -> Note
-scaleNote p root = scaleNotes' Major root !! p
+scaleNote p root = let ns = scaleNotes' Major root in ns !! (p `mod` length ns)
 
 inScale :: Scale -> Note -> Bool
 inScale s n = n `elem` (scaleNotes s)
@@ -111,10 +111,11 @@ xiii = scaleNote 12
 fl :: (Note -> Note) -> (Note -> Note)
 fl = (flatten .)
 
--- sh :: (Note -> Note) -> (Note -> Note)
--- sh = (sharpen .)
+sh :: (Note -> Note) -> (Note -> Note)
+sh = (sharpen .)
 
-data ChordType = Maj | Maj7 | Dom7 | Dom7b5
+data ChordType = Maj | Maj7
+               | Dom7 | Dom7b5 | Dom7sh11
                | Min | Min7 | MinMaj7 | Min7b5
                | Alt
                | Dim
@@ -124,6 +125,7 @@ instance Show ChordType where
   show Maj7 = "Maj7"
   show Dom7 = "7"
   show Dom7b5 = "7b5"
+  show Dom7sh11 = "7#11"
   show Min = "m"
   show Min7 = "m7"
   show MinMaj7 = "minMaj7"
@@ -136,6 +138,7 @@ chordScalePositions Maj = [i, iii, v]
 chordScalePositions Maj7 = [i, iii, v, vii]
 chordScalePositions Dom7 = [i, iii, v, fl vii]
 chordScalePositions Dom7b5 = [i, iii, fl v, fl vii]
+chordScalePositions Dom7sh11 = [i, iii, fl v, sh xi]
 chordScalePositions Min = [i, fl iii, v]
 chordScalePositions Min7 = [i, fl iii, v, fl vii]
 chordScalePositions MinMaj7 = [i, fl iii, v, vii]

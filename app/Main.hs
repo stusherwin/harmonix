@@ -1,7 +1,7 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 module Main where
 
-import Music (Note (..), Scale (..), ScaleType (..), notes, inScale)
+import Music (Note (..), Chord (..), ChordType (..), Scale (..), ScaleType (..), notes, inScale, scalesForChord)
 import Data.Char (chr)
 import Foreign.C.Types
 import System.Console.ANSI
@@ -218,6 +218,10 @@ clearCursor (x, y) = do
 data ProgressionStep = Step { scales :: [Scale]
                             , editing :: Bool
                             } deriving (Eq, Show)
+
+progressionStep :: Chord -> Bool -> ProgressionStep
+progressionStep c e = Step { scales = scalesForChord c, editing = e}
+
 data State = State { cursor :: Pos
                    , cursorMin :: Pos
                    , cursorMax :: Pos
@@ -272,12 +276,15 @@ main = do
                         , cursorMin = (startX, startY)
                         , cursorMax = (startX + 5, startY + 5)
                         , quitting = False
-                        , progression = [ Step {scales = [Scale G Minor, Scale C Major, Scale Fs Minor], editing = True}
-                                        , Step {scales = [Scale A Diminished], editing = False}
-                                        , Step {scales = [Scale Bb Major], editing = False}
-                                        , Step {scales = [Scale Fs Minor], editing = False}
-                                        , Step {scales = [Scale A Major], editing = False}
-                                        , Step {scales = [Scale C WholeTone], editing = False}]
+                        , progression = [ progressionStep (Chord E Min7b5) True
+                                        , progressionStep (Chord A Dom7) False
+                                        , progressionStep (Chord C Min7) False
+                                        , progressionStep (Chord F Dom7) False
+                                        , progressionStep (Chord F Min7) False
+                                        , progressionStep (Chord Bb Dom7) False
+                                        , progressionStep (Chord Eb Maj7) False
+                                        , progressionStep (Chord Ab Dom7sh11) False
+                                        ]
                         , keys = zip (take 24 $ cycle notes) $ True:True:True:True:True:True:True:True:True:True:True:False:True:(repeat False)
                         }
   
