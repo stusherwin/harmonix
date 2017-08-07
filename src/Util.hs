@@ -4,8 +4,6 @@ module Util
   , rotate 
   ) where
 
-d = 1
-
 pad :: Int -> String -> String
 pad width str = str ++ (take (subtract (length str) width) $ repeat ' ')
 

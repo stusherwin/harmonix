@@ -1,6 +1,5 @@
 module ConsoleRender 
-  ( drawKeys
-  , displayRows
+  ( display
   ) where
 
 import Control.Monad (when)
@@ -11,9 +10,16 @@ import System.Console.ANSI
 
 import Music (Note (..), Scale (..))
 import Console (Command (..), Pos, Col (..), out, setColor)
-import App (Key, ProgressionStep (..), SharedScaleNote (..), findSharedNotes, markScaleSpan)
+import App (State (..), Key (..), ProgressionStep (..), SharedScaleNote (..), Role (..), NoteSharing (..), findSharedNotes, markScaleSpan)
 import Util (pad)
  
+f = [ "│  │░░░░││░░░░│ │ │░░░░││░░░░││░░░│ │  │░░░░││░░░░│ │ │░░░░││░░░░││░░░│ │"
+    , "│  │░C#░││░Eb░│ │ │░F#░││░Ab░││░Bb│ │  │░C#░││░Eb░│ │ │░F#░││░Ab░││░Bb│ │"
+    , "│  └──┬─┘└─┬──┘ │ └──┬─┘└──┬─┘└─┬─┘ │  └──┬─┘└─┬──┘ │ └──┬─┘└──┬─┘└─┬─┘ │"
+    , "│ C   │ D  │  E │F   │ G   │ A  │  B│ C   │ D  │  E │F   │ G   │ A  │  B│"
+    , "└─────┴────┴────┴────┴─────┴────┴───┴─────┴────┴────┴────┴─────┴────┴───┘"
+    ]
+
 defaultFg = (Col Vivid White)
 defaultBg = (Col Dull Black)
 
@@ -85,29 +91,37 @@ drawKeys (x0, y0) ks = do
                                    <*> ZipList (True : repeat False)
   setColor (Col Vivid White) (Col Dull Black)
   setCursorPosition (y0 + 7) x0 where
-    re = (Col Vivid Red)
     wh = (Col Vivid White)
-    dr = (Col Dull Red)
     bl = (Col Dull Black)
 
     drawKey :: Key -> Pos -> Bool -> IO ()
-    drawKey (C, pr) p isFirst = do
-      let bg = if pr then re else wh
+    drawKey Key{keyNote = C, sharing = sh} p isFirst = do
+      let bg = getWhiteKeyBg sh 
       drawKeyShape CFKey "C" p bl bg
       when isFirst (out $ Jmp p : (take 7 $ repeat $ Pn bl bg " "))
-    drawKey (Cs, pr) p _ = drawKeyShape BlkKey "C#" p wh $ if pr then dr else bl
-    drawKey (D, pr) p _  = drawKeyShape DAKey  "D"  p bl $ if pr then re else wh
-    drawKey (Eb, pr) p _ = drawKeyShape BlkKey "Eb" p wh $ if pr then dr else bl
-    drawKey (E, pr) p _  = drawKeyShape EBKey  "E"  p bl $ if pr then re else wh
-    drawKey (F, pr) p _  = drawKeyShape CFKey  "F"  p bl $ if pr then re else wh
-    drawKey (Fs, pr) p _ = drawKeyShape BlkKey "F#" p wh $ if pr then dr else bl
-    drawKey (G, pr) p _  = drawKeyShape GKey   "G"  p bl $ if pr then re else wh
-    drawKey (Ab, pr) p _ = drawKeyShape BlkKey "Ab" p wh $ if pr then dr else bl
-    drawKey (A, pr) p _  = drawKeyShape DAKey  "A"  p bl $ if pr then re else wh
-    drawKey (Bb, pr) p _ = drawKeyShape BlkKey "Bb" p wh $ if pr then dr else bl
-    drawKey (B, pr) p _  = drawKeyShape EBKey  "B"  p bl $ if pr then re else wh
+    drawKey Key{keyNote = Cs, sharing = sh} p _ = drawKeyShape BlkKey "C#" p wh $ getBlackKeyBg sh
+    drawKey Key{keyNote = D,  sharing = sh} p _ = drawKeyShape DAKey  "D"  p bl $ getWhiteKeyBg sh
+    drawKey Key{keyNote = Eb, sharing = sh} p _ = drawKeyShape BlkKey "Eb" p wh $ getBlackKeyBg sh
+    drawKey Key{keyNote = E,  sharing = sh} p _ = drawKeyShape EBKey  "E"  p bl $ getWhiteKeyBg sh
+    drawKey Key{keyNote = F,  sharing = sh} p _ = drawKeyShape CFKey  "F"  p bl $ getWhiteKeyBg sh
+    drawKey Key{keyNote = Fs, sharing = sh} p _ = drawKeyShape BlkKey "F#" p wh $ getBlackKeyBg sh
+    drawKey Key{keyNote = G,  sharing = sh} p _ = drawKeyShape GKey   "G"  p bl $ getWhiteKeyBg sh
+    drawKey Key{keyNote = Ab, sharing = sh} p _ = drawKeyShape BlkKey "Ab" p wh $ getBlackKeyBg sh
+    drawKey Key{keyNote = A,  sharing = sh} p _ = drawKeyShape DAKey  "A"  p bl $ getWhiteKeyBg sh
+    drawKey Key{keyNote = Bb, sharing = sh} p _ = drawKeyShape BlkKey "Bb" p wh $ getBlackKeyBg sh
+    drawKey Key{keyNote = B,  sharing = sh} p _ = drawKeyShape EBKey  "B"  p bl $ getWhiteKeyBg sh
 
-data Role = Prev | This | Next | None
+    getWhiteKeyBg InPrevAndThis = (Col Vivid Green)
+    getWhiteKeyBg InThis        = (Col Vivid Cyan)
+    getWhiteKeyBg InThisAndNext = (Col Vivid Red)
+    getWhiteKeyBg InAll         = (Col Vivid Yellow)
+    getWhiteKeyBg InNone        = (Col Vivid White)
+
+    getBlackKeyBg InPrevAndThis = (Col Dull Green)
+    getBlackKeyBg InThis        = (Col Dull Cyan)
+    getBlackKeyBg InThisAndNext = (Col Dull Red)
+    getBlackKeyBg InAll         = (Col Dull Yellow)
+    getBlackKeyBg InNone        = (Col Dull Black)
 
 displaySharedNotes :: Pos -> [Note] -> Maybe Scale -> Scale -> Maybe Scale -> Role -> IO ()
 displaySharedNotes (x, y) ns prev this next role = do
@@ -120,7 +134,7 @@ displaySharedNotes (x, y) ns prev this next role = do
     displayNote :: (SharedScaleNote, Bool) -> IO ()
     displayNote (ssn, marked) = do
       setNoteColor (ssn, marked)
-      putStr (pad 3 $ if inThis ssn then show $ note ssn else "")
+      putStr (pad 3 $ if inThis ssn then show $ sharedNote ssn else "")
       setColor defaultFg defaultBg
   
     displayArrow :: (SharedScaleNote, Bool) -> IO ()
@@ -200,3 +214,8 @@ displayRows ns (xo, yo) (a:b:ss) = do
         displayChordNames' (x, y + 2) ss
       displayChordNames' _ _ = return ()
 displayRows _ _ _ = return ()
+
+display :: State -> IO ()
+display state = do
+  drawKeys (1, 1) (keys state)
+  displayRows (map keyNote (keys state)) (2, 9) (progression state)

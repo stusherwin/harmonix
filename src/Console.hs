@@ -7,9 +7,7 @@ module Console
   ) where
 
 import System.Console.ANSI
-import Util (pad, replace, rotate)
-
-d = 1
+import Util (replace)
 
 type Pos = (Int, Int)
 data Command = P Col Col String | Pn Col Col String | Mv Int Int | Jmp Pos
