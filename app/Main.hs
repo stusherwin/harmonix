@@ -43,32 +43,33 @@ upArrow :: String
 upArrow = [chr 0x18]
 
 data KeyShape = CFKey | DAKey | EBKey | GKey | BlkKey
-data Command = P Col String | Pn Col String | Mv Int Int | Jmp Pos
+data Command = P Col Col String | Pn Col Col String | Mv Int Int | Jmp Pos
 
-data Col = Col ColorIntensity Color ColorIntensity Color
+data Col = Col ColorIntensity Color
 
-defaultColor = (Col Vivid White Dull Black)
+defaultFg = (Col Vivid White)
+defaultBg = (Col Dull Black)
 
-setColor :: Col -> IO ()
-setColor (Col fi fc bi bc) = setSGR [ SetConsoleIntensity NormalIntensity
-                                    , SetColor Foreground fi fc
-                                    , SetColor Background bi bc
-                                    ]
+setColor :: Col -> Col -> IO ()
+setColor (Col fi fc) (Col bi bc) = setSGR [ SetConsoleIntensity NormalIntensity
+                                          , SetColor Foreground fi fc
+                                          , SetColor Background bi bc
+                                          ]
 
 out :: [Command] -> IO ()
 out = mapM_ out' where
   out' :: Command -> IO ()
-  out' (P col str) = putStrMask '%' col (replace ' ' '%' str)
-  out' (Pn col str) = putStrMask '%' col (replace ' ' '%' str) >> cursorBackward (length str) >> cursorDown 1
+  out' (P fg bg str) = putStrMask '%' fg bg (replace ' ' '%' str)
+  out' (Pn fg bg str) = putStrMask '%' fg bg (replace ' ' '%' str) >> cursorBackward (length str) >> cursorDown 1
   out' (Mv x y) = cursorForward x >> cursorDown y
   out' (Jmp (x, y)) = setCursorPosition y x
 
-  putStrMask :: Char -> Col -> String -> IO ()
-  putStrMask _ _ [] = return ()
-  putStrMask mask col@(Col _ _ bi bc) str = do
-    setColor (Col bi bc bi bc) >> putStr masked 
-    setColor col               >> putStr text
-    putStrMask mask col rest where
+  putStrMask :: Char -> Col -> Col -> String -> IO ()
+  putStrMask _ _ _ [] = return ()
+  putStrMask mask fg bg str = do
+    setColor bg bg >> putStr masked 
+    setColor fg bg >> putStr text
+    putStrMask mask fg bg rest where
       (masked, str') = span (== mask) str
       (text, rest) = break (== mask) str'
 
@@ -77,81 +78,82 @@ drawKeys (x0, y0) ks = do
   sequence_ $ getZipList $ drawKey <$> ZipList ks
                                    <*> ZipList [(x0 + i, y0) | i <- [0, 3 ..]]
                                    <*> ZipList (True : repeat False)
-  setColor (Col Vivid White Dull Black)
+  setColor (Col Vivid White) (Col Dull Black)
   setCursorPosition (y0 + 7) x0 where
-    red = (Col Dull Black Vivid Red)
-    white = (Col Dull Black Vivid White)
-    darkRed = (Col Vivid White Dull Red)
-    black = (Col Vivid White Dull Black)
+    re = (Col Vivid Red)
+    wh = (Col Vivid White)
+    dr = (Col Dull Red)
+    bl = (Col Dull Black)
 
     drawKey :: Key -> Pos -> Bool -> IO ()
     drawKey (C, pr) p isFirst = do
-      let c = if pr then red else white
-      drawKeyShape CFKey "C" p c
-      when isFirst (out $ Jmp p : (take 7 $ repeat $ Pn c " "))
-    drawKey (Cs, pr) p _ = drawKeyShape BlkKey "C#" p $ if pr then darkRed else black
-    drawKey (D, pr) p _  = drawKeyShape DAKey  "D"  p $ if pr then red else white
-    drawKey (Eb, pr) p _ = drawKeyShape BlkKey "Eb" p $ if pr then darkRed else black
-    drawKey (E, pr) p _  = drawKeyShape EBKey  "E"  p $ if pr then red else white
-    drawKey (F, pr) p _  = drawKeyShape CFKey  "F"  p $ if pr then red else white
-    drawKey (Fs, pr) p _ = drawKeyShape BlkKey "F#" p $ if pr then darkRed else black
-    drawKey (G, pr) p _  = drawKeyShape GKey   "G"  p $ if pr then red else white
-    drawKey (Ab, pr) p _ = drawKeyShape BlkKey "Ab" p $ if pr then darkRed else black
-    drawKey (A, pr) p _  = drawKeyShape DAKey  "A"  p $ if pr then red else white
-    drawKey (Bb, pr) p _ = drawKeyShape BlkKey "Bb" p $ if pr then darkRed else black
-    drawKey (B, pr) p _  = drawKeyShape EBKey  "B"  p $ if pr then red else white
+      let bg = if pr then re else wh
+      drawKeyShape CFKey "C" p bl bg
+      when isFirst (out $ Jmp p : (take 7 $ repeat $ Pn bl bg " "))
+    drawKey (Cs, pr) p _ = drawKeyShape BlkKey "C#" p wh $ if pr then dr else bl
+    drawKey (D, pr) p _  = drawKeyShape DAKey  "D"  p bl $ if pr then re else wh
+    drawKey (Eb, pr) p _ = drawKeyShape BlkKey "Eb" p wh $ if pr then dr else bl
+    drawKey (E, pr) p _  = drawKeyShape EBKey  "E"  p bl $ if pr then re else wh
+    drawKey (F, pr) p _  = drawKeyShape CFKey  "F"  p bl $ if pr then re else wh
+    drawKey (Fs, pr) p _ = drawKeyShape BlkKey "F#" p wh $ if pr then dr else bl
+    drawKey (G, pr) p _  = drawKeyShape GKey   "G"  p bl $ if pr then re else wh
+    drawKey (Ab, pr) p _ = drawKeyShape BlkKey "Ab" p wh $ if pr then dr else bl
+    drawKey (A, pr) p _  = drawKeyShape DAKey  "A"  p bl $ if pr then re else wh
+    drawKey (Bb, pr) p _ = drawKeyShape BlkKey "Bb" p wh $ if pr then dr else bl
+    drawKey (B, pr) p _  = drawKeyShape EBKey  "B"  p bl $ if pr then re else wh
 
-    drawKeyShape :: KeyShape -> String -> Pos -> Col -> IO ()
-    drawKeyShape CFKey n p c = out $ Jmp p
-                                : Pn c "│  "
-                                : Pn c "│  "
-                                : Pn c "│  "
-                                : Pn c "│  "
-                                : Pn c "│    "
-                                : Pn c "│    "
-                                : Pn c "│    "
-                                : Mv 1 (-2) : P c n
-                                : []
+    drawKeyShape :: KeyShape -> String -> Pos -> Col -> Col -> IO ()
+    drawKeyShape CFKey n p fg bg = out $ Jmp p
+                                       : Pn fg bg "│  "
+                                       : Pn fg bg "│  "
+                                       : Pn fg bg "│  "
+                                       : Pn fg bg "│  "
+                                       : Pn fg bg "│    "
+                                       : Pn fg bg "│    "
+                                       : Pn fg bg "│    "
+                                       : Mv 1 (-2) : P fg bg n
+                                       : []
 
-    drawKeyShape DAKey n p c = out $ Jmp p : Mv 1 0
-                                  : Pn c   "  "
-                                  : Pn c   "  "
-                                  : Pn c   "  "
-                                  : Pn c   "  " : Mv (-2) 0
-                                  : Pn c "│    "
-                                  : Pn c "│ D  "
-                                  : Pn c "│    "
-                                  : Mv 2 (-2) : P c n
-                                  : []
+    drawKeyShape DAKey n p fg bg = out $ Jmp p : Mv 1 0
+                                       : Pn fg bg   "  "
+                                       : Pn fg bg   "  "
+                                       : Pn fg bg   "  "
+                                       : Pn fg bg   "  " : Mv (-2) 0
+                                       : Pn fg bg "│    "
+                                       : Pn fg bg "│ D  "
+                                       : Pn fg bg "│    "
+                                       : Mv 2 (-2) : P fg bg n
+                                       : []
 
-    drawKeyShape EBKey n p c = out $ Jmp p : Mv 1 0
-                                : Pn c    "  "
-                                : Pn c    "  "
-                                : Pn c    "  "
-                                : Pn c    "  " : Mv (-3) 0
-                                : Pn c "│    "
-                                : Pn c "│    "
-                                : Pn c "│    "
-                                : Mv 3 (-2) : P c n
-                                : []
+    drawKeyShape EBKey n p fg bg = out $ Jmp p : Mv 1 0
+                                       : Pn fg bg    "  "
+                                       : Pn fg bg    "  "
+                                       : Pn fg bg    "  "
+                                       : Pn fg bg    "  " : Mv (-3) 0
+                                       : Pn fg bg "│    "
+                                       : Pn fg bg "│    "
+                                       : Pn fg bg "│    "
+                                       : Mv 3 (-2) : P fg bg n
+                                       : []
 
-    drawKeyShape GKey n p c = out $ Jmp p : Mv 1 0
-                                : Pn c   "  "
-                                : Pn c   "  "
-                                : Pn c   "  "
-                                : Pn c   "  " : Mv (-2) 0
-                                : Pn c "│     "
-                                : Pn c "│     "
-                                : Pn c "│     "
-                                : Mv 2 (-2) : P c n
-                                : []
+    drawKeyShape GKey n p fg bg = out $ Jmp p : Mv 1 0
+                                      : Pn fg bg   "  "
+                                      : Pn fg bg   "  "
+                                      : Pn fg bg   "  "
+                                      : Pn fg bg   "  " : Mv (-2) 0
+                                      : Pn fg bg "│     "
+                                      : Pn fg bg "│     "
+                                      : Pn fg bg "│     "
+                                      : Mv 2 (-2) : P fg bg n
+                                      : []
 
-    drawKeyShape BlkKey n p c = out $ Jmp p : Pn c "    "
-                                  : Pn c "    "
-                                  : Pn c " Eb "
-                                  : Pn c "    "
-                                  : Mv 1 (-2) : P c n 
-                                  : []
+    drawKeyShape BlkKey n p fg bg = out $ Jmp p
+                                        : Pn fg bg "    "
+                                        : Pn fg bg "    "
+                                        : Pn fg bg " Eb "
+                                        : Pn fg bg "    "
+                                        : Mv 1 (-2) : P fg bg n 
+                                        : []
 
 partOfScale :: [Note] -> Scale -> [(Note, Bool)]
 partOfScale ns s = map (\n -> (n, inScale s n)) ns
@@ -187,33 +189,36 @@ displaySharedNotes (x, y) ns prev this next = do
     displayNote :: (SharedScaleNote, Bool) -> IO ()
     displayNote (ssn, marked) = do
       setNoteColor (ssn, marked)
-      putStr (pad 3 $ show $ note ssn)
-      setColor defaultColor
+      putStr (pad 3 $ if inThis ssn then show $ note ssn else "")
+      setColor defaultFg defaultBg
   
     displayArrow :: (SharedScaleNote, Bool) -> IO ()
     displayArrow (ssn, _) = do
-      setColor (Col Dull Red Dull Black)
+      setColor (Col Dull Red) (Col Dull Black)
       putStr (pad 3 $ if (inThis ssn && inNext ssn) then downArrow else "")
-      setColor defaultColor
+      setColor defaultFg defaultBg
   
     setNoteColor :: (SharedScaleNote, Bool) -> IO ()
-    setNoteColor (ssn, marked) = case (inPrev ssn, inThis ssn, inNext ssn, marked) of
-      (_, False, _, False)        -> setColor (Col Dull Black  Dull Black)
-      (False, True, False, False) -> setColor (Col Vivid White Dull Black)
-      (_, False, _, True)         -> setColor (Col Dull Red    Dull Red)
-      (False, True, False, True)  -> setColor (Col Vivid White Dull Red)
-      (True, True, _, False)      -> setColor (Col Vivid Red   Dull Black)
-      (_, True, True, False)      -> setColor (Col Vivid Red   Dull Black)
-      (True, True, _, True)       -> setColor (Col Vivid Red   Dull Red)
-      (_, True, True, True)       -> setColor (Col Vivid Red   Dull Red)
+    setNoteColor (ssn, marked) =
+      let unsharedFg = (Col Vivid White)
+          unmarkedBg = (Col Dull Black)
+          sharedFg   = (Col Vivid Red)
+          markedBg   = (Col Dull Red)
+          bg = if marked then markedBg else unmarkedBg
+          fg = case (inPrev ssn, inThis ssn, inNext ssn) of
+                    (False,      True,       False     ) -> unsharedFg
+                    (True,       True,       _         ) -> sharedFg
+                    (_,          True,       True      ) -> sharedFg
+                    (_,          False,      _         ) -> bg
+      in setColor fg bg
 
 displayCursor :: Pos -> IO ()
 displayCursor (x, y) = do
-  setCursorPosition y x >> setColor (Col Vivid White Vivid White) >> putStr "%" >> setColor defaultColor
+  setCursorPosition y x >> setColor (Col Vivid White) (Col Vivid White) >> putStr "%" >> setColor defaultFg defaultBg
 
 clearCursor :: Pos -> IO ()
 clearCursor (x, y) = do
-  setCursorPosition y x >> setColor (Col Dull Black Dull Black) >> putStr "%"  >> setColor defaultColor
+  setCursorPosition y x >> setColor (Col Dull Black) (Col Dull Black) >> putStr "%"  >> setColor defaultFg defaultBg
   
 data ProgressionStep = Step { scales :: [Scale]
                             , chords :: [Chord]
@@ -346,7 +351,7 @@ main = do
             displayScaleNames' (x, y) (Step{scales = s, editingScale = e}:ss) = do
               setCursorPosition y x
               clearFromCursorToLineEnd
-              if e then setColor (Col Dull Black Vivid White) else setColor (Col Vivid White Dull Black)
+              if e then setColor (Col Dull Black) (Col Vivid White) else setColor (Col Vivid White) (Col Dull Black)
               putStr $ show $ head s
               displayScaleNames' (x, y + 2) ss
 
@@ -355,7 +360,7 @@ main = do
             displayChordNames' (x, y) (Step{chords = c, editingChord = e}:ss) = do
               setCursorPosition y x
               clearFromCursorToLineEnd
-              if e then setColor (Col Dull Black Vivid White) else setColor (Col Vivid White Dull Black)
+              if e then setColor (Col Dull Black) (Col Vivid White) else setColor (Col Vivid White) (Col Dull Black)
               putStr $ show $ head c
               displayChordNames' (x, y + 2) ss
       displayRows _ _ _ = return ()
