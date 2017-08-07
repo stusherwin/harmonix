@@ -1,14 +1,14 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 module Main where
 
-import Music (Note (..), Chord (..), ChordType (..), Scale (..), ScaleType (..), notes, inScale, scalesForChord)
+import Music (Note (..), Chord (..), ChordType (..), Scale (..), ScaleType (..), notes, inScale, scalesForChord, chordsForScale)
 import Data.Char (chr)
 import Foreign.C.Types
 import System.Console.ANSI
 import Control.Monad (when)
 import Control.Applicative (ZipList (..), (<$>), (<*>))
 import System.IO (hSetEcho, stdin, hSetBuffering, stdout, BufferMode (..))
-import Data.List (findIndex, last)
+import Data.List (findIndex, last, nub)
 
 getHiddenChar = fmap (chr.fromEnum) c_getch
 foreign import ccall unsafe "conio.h getch"
@@ -216,13 +216,16 @@ clearCursor (x, y) = do
   setCursorPosition y x >> setColor (Col Dull Black Dull Black) >> putStr "%"  >> setColor defaultColor
   
 data ProgressionStep = Step { scales :: [Scale]
-                            , chord :: Chord
+                            , chords :: [Chord]
                             , editingScale :: Bool
                             , editingChord :: Bool
                             } deriving Eq
 
 progressionStep :: Chord -> Bool -> ProgressionStep
-progressionStep c e = Step { scales = scalesForChord c, chord = c, editingScale = e, editingChord = False }
+progressionStep c e = Step { scales = scalesForChord c
+                           , chords = nub $ c : (chordsForScale $ head $ scalesForChord c)
+                           , editingScale = e
+                           , editingChord = False }
 
 data State = State { cursor :: Pos
                    , cursorMin :: Pos
@@ -267,8 +270,10 @@ respondToInput' state = do
     rotateStep' :: State -> Int -> State
     rotateStep' State {progression = p} delta =
       let i = maybe (length p) id $ findIndex (\x -> editingScale x || editingChord x) p
-          (pre, (s@Step{scales = scs}:post)) = splitAt i p
-      in state{progression = pre ++ (s{scales = rotate delta scs}:post)} where
+          (pre, (s@Step{scales = scs, chords = chs, editingScale = es}:post)) = splitAt i p
+      in if es
+           then let scs' = rotate delta scs in state{progression = pre ++ (s{scales = scs', chords = nub $ (head chs) : (chordsForScale $ head scs')}:post)}
+           else let chs' = rotate delta chs in state{progression = pre ++ (s{chords = chs', scales = nub $ (head scs) : (scalesForChord $ head chs')}:post)}
     
     toggleScaleChord' :: State -> State
     toggleScaleChord' State {progression = p} =
@@ -322,7 +327,7 @@ main = do
       displayRows :: [Note] -> Pos -> [ProgressionStep] -> IO ()
       displayRows ns (xo, yo) (a:b:ss) = do
         displayScaleNames' (xo + (24*3 + 2), yo) (a:b:ss)
-        displayChordNames' (xo + (24*3 + 20), yo) (a:b:ss)
+        displayChordNames' (xo + (24*3 + 27), yo) (a:b:ss)
         displayRows' (xo, yo) Nothing (head $ scales a) (Just $ head $ scales b) ss
           where
             displayRows' :: Pos -> Maybe Scale -> Scale -> Maybe Scale -> [ProgressionStep] -> IO ()
@@ -347,10 +352,10 @@ main = do
 
             displayChordNames' :: Pos -> [ProgressionStep] -> IO ()
             displayChordNames' _ [] = return ()
-            displayChordNames' (x, y) (Step{chord = c, editingChord = e}:ss) = do
+            displayChordNames' (x, y) (Step{chords = c, editingChord = e}:ss) = do
               setCursorPosition y x
               clearFromCursorToLineEnd
               if e then setColor (Col Dull Black Vivid White) else setColor (Col Vivid White Dull Black)
-              putStr $ show $ c
+              putStr $ show $ head c
               displayChordNames' (x, y + 2) ss
       displayRows _ _ _ = return ()

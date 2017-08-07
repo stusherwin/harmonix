@@ -9,6 +9,7 @@ module Music (
   scalesForChord,
   scalesForProgression,
   inScale,
+  chordsForScale
 ) where
 
 import Data.List
@@ -135,8 +136,8 @@ instance Show ChordType where
 
 chordScalePositions :: ChordType -> [Note -> Note]
 chordScalePositions Maj = [i, iii, v]
-chordScalePositions Maj7 = [i, iii, v, vii]
-chordScalePositions Dom7 = [i, iii, v, fl vii]
+chordScalePositions Maj7 = [i, iii, vii]
+chordScalePositions Dom7 = [i, iii, fl vii]
 chordScalePositions Dom7b5 = [i, iii, fl v, fl vii]
 chordScalePositions Dom7sh11 = [i, iii, fl v, sh xi]
 chordScalePositions Min = [i, fl iii, v]
@@ -146,7 +147,7 @@ chordScalePositions Min7b5 = [i, fl iii, fl v, fl vii]
 chordScalePositions Alt = [i, fl iii, fl v, fl vii, fl ix, fl xi, fl xiii]
 chordScalePositions Dim = [i, fl iii, fl v, vi]
 
-chordTypes = [Maj, Min, Maj7, Dom7, Min7, MinMaj7, Alt, Dim]
+chordTypes = [Maj, Min, Maj7, Dom7, Min7, MinMaj7, Alt, Dim, Min7b5, Dom7sh11, Dom7b5]
 
 data Chord = Chord Note ChordType deriving Eq
 
@@ -165,6 +166,10 @@ chordsForNotes ns = [Chord root ct | ct <- chordTypes, root <- notes, ns `contai
 
 scalesForChord :: Chord -> [Scale]
 scalesForChord c = [s | s <- scales, (chordNotes c) `containedIn` (scaleNotes s)] 
+  where containedIn as bs = sort (as `intersect` bs) == sort as
+
+chordsForScale :: Scale -> [Chord]
+chordsForScale s = [Chord root ct | ct <- chordTypes, root <- notes, (chordNotes' ct root) `containedIn` (scaleNotes s)]
   where containedIn as bs = sort (as `intersect` bs) == sort as
 
 commonNotes :: Scale -> Scale -> [Note]
