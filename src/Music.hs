@@ -1,16 +1,16 @@
-module Music (
-  Note (..), Chord (..), ChordType (..), Scale (..), ScaleType (..),
-  notes,
-  scales,
-  chordTypes,
-  scaleNotes,
-  chordNotes,
-  chordsForNotes,
-  scalesForChord,
-  scalesForProgression,
-  inScale,
-  chordsForScale
-) where
+module Music
+  ( Note(..), Chord (..), ChordType (..), Scale (..), ScaleType (..)
+  , notes
+  , scales
+  , chordTypes
+  , scaleNotes
+  , chordNotes
+  , chordsForNotes
+  , scalesForChord
+  , scalesForProgression
+  , inScale
+  , chordsForScale
+  ) where
 
 import Data.List
 
@@ -177,3 +177,4 @@ commonNotes a b = sort $ scaleNotes a `intersect` scaleNotes b
 
 scalesForProgression :: Chord -> Chord -> [(Scale, Scale, [Note])]
 scalesForProgression a b = reverse $ sortOn (\(_, _, n) -> length n) [(sa, sb, commonNotes sa sb) | sa <- scalesForChord a, sb <- scalesForChord b]
+
