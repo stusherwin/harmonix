@@ -9,7 +9,7 @@ import System.IO (hSetEcho, stdin, hSetBuffering, stdout, BufferMode (..))
 
 import Music (Note (..), Chord (..), ChordType (..), notes)
 import ConsoleRender (display)
-import App
+import App (State (..), Command (..), ProgressionStep (..), progressionStep, handleCommand, key, scaleRows)
 
 getHiddenChar = fmap (chr.fromEnum) c_getch
 foreign import ccall unsafe "conio.h getch"
@@ -17,7 +17,12 @@ foreign import ccall unsafe "conio.h getch"
 
 initState :: State
 initState = State { quitting = False
-                  , progression = [ progressionStep (Chord E Min7b5) True
+                  , progression = steps
+                  , rows = scaleRows ns $ map (head . scales) steps
+                  , currentRow = 0
+                  , keys = zipWith key ns pressed
+                  } where ns = take 24 $ cycle notes
+                          steps = [ progressionStep (Chord E Min7b5) True
                                   , progressionStep (Chord A Dom7) False
                                   , progressionStep (Chord C Min7) False
                                   , progressionStep (Chord F Dom7) False
@@ -26,8 +31,7 @@ initState = State { quitting = False
                                   , progressionStep (Chord Eb Maj7) False
                                   , progressionStep (Chord Ab Dom7sh11) False
                                   ]
-                  , keys = zipWith key (take 24 $ cycle notes) $ True:True:True:True:True:True:True:True:True:True:True:False:(repeat False)
-                  }
+                          pressed = True:True:True:True:True:True:True:True:True:True:True:False:(repeat False)
   
 main :: IO ()
 main = do

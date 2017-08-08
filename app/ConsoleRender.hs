@@ -8,18 +8,18 @@ import Data.Char (chr)
 
 import System.Console.ANSI
 
-import Music (Note (..), Scale (..), isRoot)
+import Music (Note (..), isRoot)
 import Console (Command (..), Pos, Col (..), out, setColor)
-import App (State (..), Key (..), ProgressionStep (..), SharedScaleNote (..), Role (..), NoteSharing (..), findSharedNotes, markScaleSpan)
-import Util (pad, rotate)
+import App (State (..), Key (..), ProgressionStep (..), Role (..), ScaleRow (..), ScaleRowNote (..))
+import Util (pad)
  
-f = [ "│  │░░░░││░░░░│ │ │░░░░││░░░░││░░░│ │  │░░░░││░░░░│ │ │░░░░││░░░░││░░░│ │"
-    , "│  │░C#░││░Eb░│ │ │░F#░││░Ab░││░Bb│ │  │░C#░││░Eb░│ │ │░F#░││░Ab░││░Bb│ │"
-    , "│  └──┬─┘└─┬──┘ │ └──┬─┘└──┬─┘└─┬─┘ │  └──┬─┘└─┬──┘ │ └──┬─┘└──┬─┘└─┬─┘ │"
-    , "│ C   │ D  │  E │F   │ G   │ A  │  B│ C   │ D  │  E │F   │ G   │ A  │  B│"
-    , "└─────┴────┴────┴────┴─────┴────┴───┴─────┴────┴────┴────┴─────┴────┴───┘"
-    ]
-f' = "┐┌"
+-- [ "│  │░░░░││░░░░│ │ │░░░░││░░░░││░░░│ │  │░░░░││░░░░│ │ │░░░░││░░░░││░░░│ │"
+-- , "│  │░C#░││░Eb░│ │ │░F#░││░Ab░││░Bb│ │  │░C#░││░Eb░│ │ │░F#░││░Ab░││░Bb│ │"
+-- , "│  └──┬─┘└─┬──┘ │ └──┬─┘└──┬─┘└─┬─┘ │  └──┬─┘└─┬──┘ │ └──┬─┘└──┬─┘└─┬─┘ │"
+-- , "│ C   │ D  │  E │F   │ G   │ A  │  B│ C   │ D  │  E │F   │ G   │ A  │  B│"
+-- , "└─────┴────┴────┴────┴─────┴────┴───┴─────┴────┴────┴────┴─────┴────┴───┘"
+-- , "┐┌"
+-- ]
 
 defaultFg = (Col Vivid White)
 defaultBg = (Col Dull Black)
@@ -112,55 +112,70 @@ drawKeys (x0, y0) ks = do
     drawKey Key{keyNote = Bb, sharing = sh} p _ = (drawKeyShape BlkKey "Bb" p wh $ getBlackKeyBg sh) >> drawBlackKeyMarker sh
     drawKey Key{keyNote = B,  sharing = sh} p _ = (drawKeyShape EBKey  "B"  p bl $ getWhiteKeyBg sh) >> drawWhiteKeyMarker sh
 
-    getWhiteKeyBg InPrevAndThis = (Col Vivid Green)
-    getWhiteKeyBg InThis        = (Col Vivid Cyan)
-    getWhiteKeyBg InThisAndNext = (Col Vivid Red)
-    getWhiteKeyBg InAll         = (Col Vivid Yellow)
-    getWhiteKeyBg InNone        = (Col Vivid White)
+    getWhiteKeyBg :: (Bool, Bool, Bool) -> Col
+    getWhiteKeyBg (True, True, False)  = (Col Vivid Green)
+    getWhiteKeyBg (False, True, False) = (Col Vivid Cyan)
+    getWhiteKeyBg (False, True, True)  = (Col Vivid Red)
+    getWhiteKeyBg (True, True, True)   = (Col Vivid Yellow)
+    getWhiteKeyBg _                    = (Col Vivid White)
 
-    getBlackKeyBg InPrevAndThis = (Col Dull Green)
-    getBlackKeyBg InThis        = (Col Dull Cyan)
-    getBlackKeyBg InThisAndNext = (Col Dull Red)
-    getBlackKeyBg InAll         = (Col Dull Yellow)
-    getBlackKeyBg InNone        = (Col Dull Black)
+    getBlackKeyBg :: (Bool, Bool, Bool) -> Col
+    getBlackKeyBg (True, True, False)  = (Col Dull Green)
+    getBlackKeyBg (False, True, False) = (Col Dull Cyan)
+    getBlackKeyBg (False, True, True)  = (Col Dull Red)
+    getBlackKeyBg (True, True, True)   = (Col Dull Yellow)
+    getBlackKeyBg _                    = (Col Dull Black)
 
-    drawWhiteKeyMarker InNone = return ()
-    drawWhiteKeyMarker InThis = return ()
-    drawWhiteKeyMarker InPrevAndThis = cursorBackward 1 >> cursorUp 1 >> putStr upArrow
-    drawWhiteKeyMarker InThisAndNext = cursorBackward 1 >> cursorDown 1 >> putStr downArrow
-    drawWhiteKeyMarker InAll = cursorBackward 1 >> cursorUp 1 >> putStr upArrow >> cursorDown 2 >> cursorBackward 1 >> putStr downArrow
+    drawWhiteKeyMarker :: (Bool, Bool, Bool) -> IO ()
+    drawWhiteKeyMarker (True, True, False) = cursorBackward 1 >> cursorUp 1 >> putStr upArrow
+    drawWhiteKeyMarker (False, True, True) = cursorBackward 1 >> cursorDown 1 >> putStr downArrow
+    drawWhiteKeyMarker (True, True, True)  = cursorBackward 1 >> cursorUp 1 >> putStr upArrow >> cursorDown 2 >> cursorBackward 1 >> putStr downArrow
+    drawWhiteKeyMarker _                   = return ()
       
-    drawBlackKeyMarker InNone = return ()
-    drawBlackKeyMarker InThis = return ()
-    drawBlackKeyMarker InPrevAndThis = cursorBackward 2 >> cursorUp 1 >> putStr upArrow
-    drawBlackKeyMarker InThisAndNext = cursorBackward 2 >> cursorDown 1 >> putStr downArrow
-    drawBlackKeyMarker InAll = cursorBackward 2 >> cursorUp 1 >> putStr upArrow >> cursorDown 2 >> cursorBackward 1 >> putStr downArrow
+    drawBlackKeyMarker :: (Bool, Bool, Bool) -> IO ()
+    drawBlackKeyMarker (True, True, False) = cursorBackward 2 >> cursorUp 1 >> putStr upArrow
+    drawBlackKeyMarker (False, True, True) = cursorBackward 2 >> cursorDown 1 >> putStr downArrow
+    drawBlackKeyMarker (True, True, True)  = cursorBackward 2 >> cursorUp 1 >> putStr upArrow >> cursorDown 2 >> cursorBackward 1 >> putStr downArrow
+    drawBlackKeyMarker _                   = return ()
+getRole :: Int -> Int -> Int -> Role
+getRole curr len i | i == curr = This
+                   | i == (curr - 1 + len) `mod` len = Prev
+                   | i == (curr + 1 + len) `mod` len = Next
+                   | otherwise = None
 
-displaySharedNotes :: Pos -> [Note] -> (Scale, Scale, Scale) -> Role -> IO ()
-displaySharedNotes (x, y) ns (prev, this, next) role = do
-  setCursorPosition y x
-  sequence_ $ map displayNote $ sharedNotes where
-    sharedNotes = zip (findSharedNotes ns (prev, this, next)) (markScaleSpan this ns)
+displayNotes :: Pos -> [ScaleRow] -> Int -> IO ()
+displayNotes pos scrs curr = do
+  displayNotes' pos (zip scrs $ map (getRole curr $ length scrs) [0..])
+  where
+    displayNotes' :: Pos -> [(ScaleRow, Role)] -> IO ()
+    displayNotes' _ [] = return ()
+    displayNotes' (x, y) ((r, role):rs) = do
+      displayNoteRow (x, y) r role
+      displayNotes' (x, y + 2) rs
+
+    displayNoteRow :: Pos -> ScaleRow -> Role -> IO ()
+    displayNoteRow (x, y) row role = do
+      setCursorPosition y x
+      sequence_ $ map (displayNote row role) $ notes row
   
-    displayNote :: (SharedScaleNote, Bool) -> IO ()
-    displayNote (ssn, marked) = do
-      let n = sharedNote ssn
-      setNoteColor ssn
-      putStr (pad 3 $ if inThis ssn then show $ sharedNote ssn else "")
+    displayNote :: ScaleRow -> Role -> ScaleRowNote -> IO ()
+    displayNote this role (ScaleRowNote {note = n, marked = m, sharing' = sh@(_, inThis, _)}) = do
+      setNoteColor role sh
+      putStr (pad 3 $ if inThis then show $ n else "")
       setColor (Col Vivid Black) (Col Dull Black)
-      when (isRoot this n) $ do
+      when (isRoot (scale this) n) $ do
         cursorBackward 4
         putStr "│"
-        if marked
+        if m
           then cursorBackward 1 >> cursorUp 1 >> putStr "┌" >> cursorBackward 1 >> cursorDown 2 >> putStr "└" >> cursorUp 1 >> cursorForward 3
           else cursorBackward 1 >> cursorUp 1 >> putStr "┐" >> cursorBackward 1 >> cursorDown 2 >> putStr "┘" >> cursorUp 1 >> cursorForward 3
-      when marked $ cursorBackward 3 >> cursorUp 1 >> putStr "───" >> cursorBackward 3 >> cursorDown 2 >> putStr "───" >> cursorUp 1
+      when m $ cursorBackward 3 >> cursorUp 1 >> putStr "───" >> cursorBackward 3 >> cursorDown 2 >> putStr "───" >> cursorUp 1
       setColor defaultFg defaultBg
   
-    setNoteColor :: SharedScaleNote -> IO ()
-    setNoteColor ssn =
+    setNoteColor :: Role -> (Bool, Bool, Bool) -> IO ()
+    setNoteColor role (inPrev, inThis, inNext) =
       let bg = Col Dull Black
-          fg = case (inPrev ssn, inThis ssn, inNext ssn, role) of
+          fg = case (inPrev, inThis, inNext, role) of
                     (_, True, _, Prev)         -> Col Vivid Green
                     (_, True, _, Next)         -> Col Vivid Red
                     (False, True, False, This) -> Col Vivid Cyan
@@ -171,48 +186,36 @@ displaySharedNotes (x, y) ns (prev, this, next) role = do
                     _ -> bg
       in  setColor fg bg
 
-displaySharedNoteArrows :: Pos -> [Note] -> (Scale, Scale, Scale) -> Role -> IO ()
-displaySharedNoteArrows (x, y) ns (prev, this, next) role = do
-  setCursorPosition (y + 1) x
-  sequence_ $ map displayArrow $ sharedNotes where
-    sharedNotes = zip (findSharedNotes ns (prev, this, next)) (markScaleSpan this ns)
-  
-    displayArrow :: (SharedScaleNote, Bool) -> IO ()
-    displayArrow (ssn, _) = do
+displayArrows :: Pos -> [ScaleRow] -> Int -> IO ()
+displayArrows pos scrs curr = do
+  displayArrows' pos (zip scrs $ map (getRole curr $ length scrs) [0..])
+  where
+    displayArrows' :: Pos -> [(ScaleRow, Role)] -> IO ()
+    displayArrows' _ [] = return ()
+    displayArrows' (x, y) ((r, role):rs) = do
+      displayArrowRow (x, y) r role
+      displayArrows' (x, y + 2) rs
+
+    displayArrowRow :: Pos -> ScaleRow -> Role -> IO ()
+    displayArrowRow (x, y) row role = do
+      setCursorPosition (y + 1) x
+      sequence_ $ map (displayArrow role) $ notes row
+      
+    displayArrow :: Role -> ScaleRowNote -> IO ()
+    displayArrow role (ScaleRowNote {sharing' = (_, inThis, inNext)}) = do
       setColor (case role of Prev -> (Col Vivid Green)
                              This -> (Col Vivid Red)
                              _ -> (Col Vivid White)) (Col Dull Black)
-      if (inThis ssn && inNext ssn)
+      if (inThis && inNext)
         then putStr (case role of Prev -> upArrow
                                   _ -> downArrow) >> cursorForward 2
         else cursorForward 3
       setColor defaultFg defaultBg
 
-displayNotes :: [Note] -> Pos -> (Scale, Scale, Scale) -> [ProgressionStep] -> Int -> Role -> IO ()
-displayNotes ns (x, y) (s1, s2, s3) _ 0 role = do
-  displaySharedNotes (x, y) ns (s1, s2, s3) role
-displayNotes ns (x, y) (s1, s2, s3) scs@(s4:_) n role = do
-  displaySharedNotes (x, y) ns (s1, s2, s3) role
-  displayNotes ns (x, y + 2) (s2, s3, (head $ scales s4)) (rotate 1 scs) (n - 1) $
-    case (role, editingScale s4 || editingChord s4) of
-      (Prev, _) -> This
-      (This, _) -> Next
-      (_, True) -> Prev
-      _ -> None
-displayNotes _ _ _ _ _ _ = return ()
-
-displayArrows :: [Note] -> Pos -> (Scale, Scale, Scale) -> [ProgressionStep] -> Int -> Role -> IO ()
-displayArrows ns (x, y) (s1, s2, s3) _ 0 role = do
-  displaySharedNoteArrows (x, y) ns (s1, s2, s3) role
-displayArrows ns (x, y) (s1, s2, s3) scs@(s4:_) n role = do
-  displaySharedNoteArrows (x, y) ns (s1, s2, s3) role
-  displayArrows ns (x, y + 2) (s2, s3, (head $ scales s4)) (rotate 1 scs) (n - 1) $
-    case (role, editingScale s4 || editingChord s4) of
-      (Prev, _) -> This
-      (This, _) -> Next
-      (_, True) -> Prev
-      _ -> None
-displayArrows _ _ _ _ _ _ = return ()
+displayRows ::Pos -> [ScaleRow] -> Int -> IO ()
+displayRows pos rs curr = do
+  displayNotes pos rs curr
+  displayArrows pos rs curr
 
 displayScaleNames :: Pos -> [ProgressionStep] -> IO ()
 displayScaleNames (x, y) (Step{scales = s, editingScale = e}:ss) = do
@@ -236,29 +239,14 @@ clearLines :: Int -> IO ()
 clearLines 0 = return ()
 clearLines n = clearLine >> cursorDown 1 >> clearLines (n - 1)
 
-displayRows :: [Note] -> Pos -> [ProgressionStep] -> IO ()
-displayRows ns (x, y) steps@(s1:s2:_) = do
-  setCursorPosition (y - 1) x
-  clearLines $ (length steps + 1) * 2
-  displayScaleNames (x + (24*3 + 2), y) steps
-  displayChordNames (x + (24*3 + 27), y) steps
-  let lastStep = last steps
-  displayNotes ns (x, y) ((head $ scales $ lastStep), (head $ scales s1), (head $ scales s2)) (rotate 2 steps) (length steps - 1)
-    $ case (editingScale lastStep || editingChord lastStep, editingScale s1 || editingChord s1, editingScale s2 || editingChord s2) of
-            (True, _, _) -> Next 
-            (_, True, _) -> This 
-            (_, _, True) -> Prev
-            _         -> None
-  displayArrows ns (x, y) ((head $ scales $ lastStep), (head $ scales s1), (head $ scales s2)) (rotate 2 steps) (length steps - 1) 
-    $ case (editingScale lastStep || editingChord lastStep,editingScale s1 || editingChord s1, editingScale s2 || editingChord s2) of
-            (True, _, _) -> Next
-            (_, True, _) -> This 
-            (_, _, True) -> Prev
-            _         -> None
-
-displayRows _ _ _ = return ()
-
 display :: State -> IO ()
 display state = do
-  drawKeys (1, 1) (keys state)
-  displayRows (map keyNote (keys state)) (2, 9) (progression state)
+  drawKeys (1, 1) $ keys state
+  display' (2, 9) where
+    display' :: Pos -> IO ()
+    display' (x, y) = do
+      setCursorPosition (y - 1) x
+      clearLines $ (length (rows state) + 1) * 2
+      displayRows (x, y) (rows state) (currentRow state)
+      displayScaleNames (x + (24*3 + 2), y) (progression state)
+      displayChordNames (x + (24*3 + 27), y) (progression state)
