@@ -11,7 +11,7 @@ import System.Console.ANSI
 import Music (Note (..), Scale (..), isRoot)
 import Console (Command (..), Pos, Col (..), out, setColor)
 import App (State (..), Key (..), ProgressionStep (..), SharedScaleNote (..), Role (..), NoteSharing (..), findSharedNotes, markScaleSpan)
-import Util (pad)
+import Util (pad, rotate)
  
 f = [ "│  │░░░░││░░░░│ │ │░░░░││░░░░││░░░│ │  │░░░░││░░░░│ │ │░░░░││░░░░││░░░│ │"
     , "│  │░C#░││░Eb░│ │ │░F#░││░Ab░││░Bb│ │  │░C#░││░Eb░│ │ │░F#░││░Ab░││░Bb│ │"
@@ -136,11 +136,11 @@ drawKeys (x0, y0) ks = do
     drawBlackKeyMarker InThisAndNext = cursorBackward 2 >> cursorDown 1 >> putStr downArrow
     drawBlackKeyMarker InAll = cursorBackward 2 >> cursorUp 1 >> putStr upArrow >> cursorDown 2 >> cursorBackward 1 >> putStr downArrow
 
-displaySharedNotes :: Pos -> [Note] -> Maybe Scale -> Scale -> Maybe Scale -> Role -> IO ()
-displaySharedNotes (x, y) ns prev this next role = do
+displaySharedNotes :: Pos -> [Note] -> (Scale, Scale, Scale) -> Role -> IO ()
+displaySharedNotes (x, y) ns (prev, this, next) role = do
   setCursorPosition y x
   sequence_ $ map displayNote $ sharedNotes where
-    sharedNotes = zip (findSharedNotes ns prev this next) (markScaleSpan this ns)
+    sharedNotes = zip (findSharedNotes ns (prev, this, next)) (markScaleSpan this ns)
   
     displayNote :: (SharedScaleNote, Bool) -> IO ()
     displayNote (ssn, marked) = do
@@ -171,11 +171,11 @@ displaySharedNotes (x, y) ns prev this next role = do
                     _ -> bg
       in  setColor fg bg
 
-displaySharedNoteArrows :: Pos -> [Note] -> Maybe Scale -> Scale -> Maybe Scale -> Role -> IO ()
-displaySharedNoteArrows (x, y) ns prev this next role = do
+displaySharedNoteArrows :: Pos -> [Note] -> (Scale, Scale, Scale) -> Role -> IO ()
+displaySharedNoteArrows (x, y) ns (prev, this, next) role = do
   setCursorPosition (y + 1) x
   sequence_ $ map displayArrow $ sharedNotes where
-    sharedNotes = zip (findSharedNotes ns prev this next) (markScaleSpan this ns)
+    sharedNotes = zip (findSharedNotes ns (prev, this, next)) (markScaleSpan this ns)
   
     displayArrow :: (SharedScaleNote, Bool) -> IO ()
     displayArrow (ssn, _) = do
@@ -187,79 +187,68 @@ displaySharedNoteArrows (x, y) ns prev this next role = do
                                   _ -> downArrow) >> cursorForward 2
         else cursorForward 3
       setColor defaultFg defaultBg
+
+displayNotes :: [Note] -> Pos -> (Scale, Scale, Scale) -> [ProgressionStep] -> Int -> Role -> IO ()
+displayNotes ns (x, y) (s1, s2, s3) _ 0 role = do
+  displaySharedNotes (x, y) ns (s1, s2, s3) role
+displayNotes ns (x, y) (s1, s2, s3) scs@(s4:_) n role = do
+  displaySharedNotes (x, y) ns (s1, s2, s3) role
+  displayNotes ns (x, y + 2) (s2, s3, (head $ scales s4)) (rotate 1 scs) (n - 1) $
+    case (role, editingScale s4 || editingChord s4) of
+      (Prev, _) -> This
+      (This, _) -> Next
+      (_, True) -> Prev
+      _ -> None
+displayNotes _ _ _ _ _ _ = return ()
+
+displayArrows :: [Note] -> Pos -> (Scale, Scale, Scale) -> [ProgressionStep] -> Int -> Role -> IO ()
+displayArrows ns (x, y) (s1, s2, s3) _ 0 role = do
+  displaySharedNoteArrows (x, y) ns (s1, s2, s3) role
+displayArrows ns (x, y) (s1, s2, s3) scs@(s4:_) n role = do
+  displaySharedNoteArrows (x, y) ns (s1, s2, s3) role
+  displayArrows ns (x, y + 2) (s2, s3, (head $ scales s4)) (rotate 1 scs) (n - 1) $
+    case (role, editingScale s4 || editingChord s4) of
+      (Prev, _) -> This
+      (This, _) -> Next
+      (_, True) -> Prev
+      _ -> None
+displayArrows _ _ _ _ _ _ = return ()
+
+displayScaleNames :: Pos -> [ProgressionStep] -> IO ()
+displayScaleNames (x, y) (Step{scales = s, editingScale = e}:ss) = do
+  setCursorPosition y x
+  clearFromCursorToLineEnd
+  if e then setColor (Col Dull Black) (Col Vivid White) else setColor (Col Vivid White) (Col Dull Black)
+  putStr $ show $ head s
+  displayScaleNames (x, y + 2) ss
+displayScaleNames _ _ = return ()
+
+displayChordNames :: Pos -> [ProgressionStep] -> IO ()
+displayChordNames (x, y) (Step{chords = c, editingChord = e}:ss) = do
+  setCursorPosition y x
+  clearFromCursorToLineEnd
+  if e then setColor (Col Dull Black) (Col Vivid White) else setColor (Col Vivid White) (Col Dull Black)
+  putStr $ show $ head c
+  displayChordNames (x, y + 2) ss
+displayChordNames _ _ = return ()
   
 displayRows :: [Note] -> Pos -> [ProgressionStep] -> IO ()
-displayRows ns (xo, yo) (a:b:ss) = do
-  displayScaleNames (xo + (24*3 + 2), yo) (a:b:ss)
-  displayChordNames (xo + (24*3 + 27), yo) (a:b:ss)
-  displayNotes (xo, yo) Nothing (head $ scales a) (Just $ head $ scales b) ss 
-    $ case (editingScale a || editingChord a, editingScale b || editingChord b) of
-            (True, _) -> This 
-            (_, True) -> Prev
+displayRows ns (x, y) steps@(s1:s2:ss) = do
+  displayScaleNames (x + (24*3 + 2), y) steps
+  displayChordNames (x + (24*3 + 27), y) steps
+  let lastStep = last steps
+  displayNotes ns (x, y) ((head $ scales $ lastStep), (head $ scales s1), (head $ scales s2)) (rotate 2 steps) (length steps - 1)
+    $ case (editingScale lastStep || editingChord lastStep, editingScale s1 || editingChord s1, editingScale s2 || editingChord s2) of
+            (True, _, _) -> Next 
+            (_, True, _) -> This 
+            (_, _, True) -> Prev
             _         -> None
-  displayArrows (xo, yo) Nothing (head $ scales a) (Just $ head $ scales b) ss 
-    $ case (editingScale a || editingChord a, editingScale b || editingChord b) of
-            (True, _) -> This 
-            (_, True) -> Prev
+  displayArrows ns (x, y) ((head $ scales $ lastStep), (head $ scales s1), (head $ scales s2)) (rotate 2 steps) (length steps - 1) 
+    $ case (editingScale lastStep || editingChord lastStep,editingScale s1 || editingChord s1, editingScale s2 || editingChord s2) of
+            (True, _, _) -> Next
+            (_, True, _) -> This 
+            (_, _, True) -> Prev
             _         -> None
-    where
-      displayNotes :: Pos -> Maybe Scale -> Scale -> Maybe Scale -> [ProgressionStep] -> Role -> IO ()
-      displayNotes (x, y) ms1 s2 ms3@Nothing [] role = do
-        displaySharedNotes (x, y) ns ms1 s2 ms3 role
-      displayNotes (x, y) ms1 s2 ms3@(Just s3) [] role = do
-        displaySharedNotes (x, y) ns ms1 s2 ms3 role
-        displayNotes (x, y + 2) (Just s2) s3 Nothing [] $
-          case role of
-            Prev -> This
-            This -> Next
-            _ -> None
-      displayNotes (x, y) ms1 s2 ms3@(Just s3) (s4:scs) role = do
-        displaySharedNotes (x, y) ns ms1 s2 ms3 role
-        displayNotes (x, y + 2) (Just s2) s3 (Just $ head $ scales s4) scs $
-          case (role, editingScale s4 || editingChord s4) of
-            (Prev, _) -> This
-            (This, _) -> Next
-            (_, True) -> Prev
-            _ -> None
-      displayNotes _ _ _ _ _ _ = return ()
-
-      displayArrows :: Pos -> Maybe Scale -> Scale -> Maybe Scale -> [ProgressionStep] -> Role -> IO ()
-      displayArrows (x, y) ms1 s2 ms3@Nothing [] role = do
-        displaySharedNoteArrows (x, y) ns ms1 s2 ms3 role
-      displayArrows (x, y) ms1 s2 ms3@(Just s3) [] role = do
-        displaySharedNoteArrows (x, y) ns ms1 s2 ms3 role
-        displayArrows (x, y + 2) (Just s2) s3 Nothing [] $
-          case role of
-            Prev -> This
-            This -> Next
-            _ -> None
-      displayArrows (x, y) ms1 s2 ms3@(Just s3) (s4:scs) role = do
-        displaySharedNoteArrows (x, y) ns ms1 s2 ms3 role
-        displayArrows (x, y + 2) (Just s2) s3 (Just $ head $ scales s4) scs $
-          case (role, editingScale s4 || editingChord s4) of
-            (Prev, _) -> This
-            (This, _) -> Next
-            (_, True) -> Prev
-            _ -> None
-      displayArrows _ _ _ _ _ _ = return ()
-
-      displayScaleNames :: Pos -> [ProgressionStep] -> IO ()
-      displayScaleNames (x, y) (Step{scales = s, editingScale = e}:ss) = do
-        setCursorPosition y x
-        clearFromCursorToLineEnd
-        if e then setColor (Col Dull Black) (Col Vivid White) else setColor (Col Vivid White) (Col Dull Black)
-        putStr $ show $ head s
-        displayScaleNames (x, y + 2) ss
-      displayScaleNames _ _ = return ()
-
-      displayChordNames :: Pos -> [ProgressionStep] -> IO ()
-      displayChordNames (x, y) (Step{chords = c, editingChord = e}:ss) = do
-        setCursorPosition y x
-        clearFromCursorToLineEnd
-        if e then setColor (Col Dull Black) (Col Vivid White) else setColor (Col Vivid White) (Col Dull Black)
-        putStr $ show $ head c
-        displayChordNames (x, y + 2) ss
-      displayChordNames _ _ = return ()
 displayRows _ _ _ = return ()
 
 display :: State -> IO ()

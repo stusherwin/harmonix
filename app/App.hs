@@ -55,12 +55,12 @@ data SharedScaleNote = SSN { sharedNote :: Note
 -- partOfScale :: [Note] -> Scale -> [(Note, Bool)]
 -- partOfScale ns s = map (\n -> (n, inScale s n)) ns
 
-findSharedNotes :: [Note] -> Maybe Scale -> Scale -> Maybe Scale -> [SharedScaleNote]
-findSharedNotes ns prev this next = map (\n -> SSN { sharedNote = n
-                                                   , inPrev = maybe False (flip inScale n) prev
-                                                   , inThis = inScale this n
-                                                   , inNext = maybe False (flip inScale n) next
-                                                   }) ns
+findSharedNotes :: [Note] -> (Scale, Scale, Scale) -> [SharedScaleNote]
+findSharedNotes ns (prev, this, next) = map (\n -> SSN { sharedNote = n
+                                                       , inPrev = inScale prev n
+                                                       , inThis = inScale this n
+                                                       , inNext = inScale next n
+                                                       }) ns
 
 markScaleSpan :: Scale -> [Note] -> [Bool]
 markScaleSpan (Scale root _) = reverse . foldl markNote [] where
@@ -74,34 +74,34 @@ data Command = MoveStep Int | RotateStep Int | ToggleScaleChord | Quit
 buildKeys :: [Note] -> [ProgressionStep] -> [Key]
 buildKeys ns =
   buildKeys' . getScales . findCurrentSteps where
-    findCurrentSteps :: [ProgressionStep] -> (Maybe ProgressionStep, ProgressionStep, Maybe ProgressionStep)
+    findCurrentSteps :: [ProgressionStep] -> (ProgressionStep, ProgressionStep, ProgressionStep)
     findCurrentSteps steps = case steps of
-                       (s1:s2@Step{editingScale = True}:s3:_) -> (Just s1, s2, Just s3)
-                       (s1:s2@Step{editingChord = True}:s3:_) -> (Just s1, s2, Just s3)
-                       (s1@Step{editingScale = True}:s2:_)    -> (Nothing, s1, Just s2)
-                       (s1@Step{editingChord = True}:s2:_)    -> (Nothing, s1, Just s2)
-                       (s1:s2@Step{editingScale = True}:[])   -> (Just s1, s2, Nothing)
-                       (s1:s2@Step{editingChord = True}:[])   -> (Just s1, s2, Nothing)
-                       (s1:s2:s3:ss) -> findCurrentSteps (s2:s3:ss)
+                       [s1@Step{editingScale = True},s2] -> (s2, s1, s2)
+                       [s1@Step{editingChord = True},s2] -> (s2, s1, s2)
+                       [s1,s2@Step{editingScale = True}] -> (s1, s2, s1)
+                       [s1,s2@Step{editingChord = True}] -> (s1, s2, s1)
+                       (s1:s2@Step{editingScale = True}:s3:_) -> (s1, s2, s3)
+                       (s1:s2@Step{editingChord = True}:s3:_) -> (s1, s2, s3)
+                       (s1:s2:s3:ss) -> findCurrentSteps $ rotate 1 $ s1:s2:s3:ss
                        _ -> error "invalid number of progression steps (must be at least 2)"
     
-    getScales :: (Maybe ProgressionStep, ProgressionStep, Maybe ProgressionStep) -> (Maybe Scale, Scale, Maybe Scale)
-    getScales (ps1, ps2, ps3) = (getScale <$> ps1, getScale ps2, getScale <$> ps3) where
+    getScales :: (ProgressionStep, ProgressionStep, ProgressionStep) -> (Scale, Scale, Scale)
+    getScales (ps1, ps2, ps3) = (getScale ps1, getScale ps2, getScale ps3) where
       getScale = head . scales
 
-    buildKeys' :: (Maybe Scale, Scale, Maybe Scale) -> [Key]
+    buildKeys' :: (Scale, Scale, Scale) -> [Key]
     buildKeys' (prev, this, next) = 
-      let sharedNotes = findSharedNotes ns prev this next
+      let sharedNotes = findSharedNotes ns (prev, this, next)
       in  map buildKey sharedNotes where
         buildKey :: SharedScaleNote -> Key
         buildKey ssn =
-          let sharing = case (inPrev ssn, inThis ssn, inNext ssn) of
-                          (True, True, True)   -> InAll
-                          (True, True, False)  -> InPrevAndThis
-                          (False, True, True)  -> InThisAndNext
-                          (_, True, _)         -> InThis
-                          _                    -> InNone
-          in Key { keyNote = sharedNote ssn, pressed = False, sharing = sharing }
+          let sh = case (inPrev ssn, inThis ssn, inNext ssn) of
+                        (True, True, True)   -> InAll
+                        (True, True, False)  -> InPrevAndThis
+                        (False, True, True)  -> InThisAndNext
+                        (_, True, _)         -> InThis
+                        _                    -> InNone
+          in Key { keyNote = sharedNote ssn, pressed = False, sharing = sh }
 
 moveStep :: Int -> State -> State
 moveStep delta state@State{progression = p, keys = ks} =
