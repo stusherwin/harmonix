@@ -9,7 +9,7 @@ import System.IO (hSetEcho, stdin, hSetBuffering, stdout, BufferMode (..))
 
 import Music (Note (..), Chord (..), ChordType (..), notes)
 import ConsoleRender (display)
-import App (State (..), Command (..), ProgressionStep (..), progressionStep, handleCommand, key, scaleRows)
+import App (State (..), Command (..), ProgressionStep (..), EditField (..), progressionStep, handleCommand, key, scaleRows)
 
 getHiddenChar = fmap (chr.fromEnum) c_getch
 foreign import ccall unsafe "conio.h getch"
@@ -20,16 +20,17 @@ initState = State { quitting = False
                   , progression = steps
                   , rows = scaleRows ns $ map (head . scales) steps
                   , currentRow = 0
+                  , editField = EditScale
                   , keys = zipWith key ns pressed
                   } where ns = take 24 $ cycle notes
-                          steps = [ progressionStep (Chord E Min7b5) True
-                                  , progressionStep (Chord A Dom7) False
-                                  , progressionStep (Chord C Min7) False
-                                  , progressionStep (Chord F Dom7) False
-                                  , progressionStep (Chord F Min7) False
-                                  , progressionStep (Chord Bb Dom7) False
-                                  , progressionStep (Chord Eb Maj7) False
-                                  , progressionStep (Chord Ab Dom7sh11) False
+                          steps = [ progressionStep (Chord E Min7b5)
+                                  , progressionStep (Chord A Dom7)
+                                  , progressionStep (Chord C Min7)
+                                  , progressionStep (Chord F Dom7)
+                                  , progressionStep (Chord F Min7)
+                                  , progressionStep (Chord Bb Dom7)
+                                  , progressionStep (Chord Eb Maj7)
+                                  , progressionStep (Chord Ab Dom7sh11)
                                   ]
                           pressed = True:True:True:True:True:True:True:True:True:True:True:False:(repeat False)
   

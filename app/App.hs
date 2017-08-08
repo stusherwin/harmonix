@@ -6,6 +6,7 @@ module App
   , Role (..)
   , ScaleRow (..)
   , ScaleRowNote (..)
+  , EditField (..)
   , progressionStep
   , handleCommand
   , key
@@ -16,7 +17,7 @@ module App
 import Data.List (nub)
 
 import Music (Note (..), Chord (..), Scale (..), inScale, scalesForChord, chordsForScale)
-import Util (rotate)
+import Util (rotate, update)
 
 data Role = Prev | This | Next | None deriving Eq
 
@@ -61,21 +62,21 @@ scaleRows ns scs = scaleRows' (last scs:scs) (length scs) where
     
 data ProgressionStep = Step { scales :: [Scale]
                             , chords :: [Chord]
-                            , editingScale :: Bool
-                            , editingChord :: Bool
                             } deriving (Eq, Show)
 
-progressionStep :: Chord -> Bool -> ProgressionStep
-progressionStep c e = Step { scales = scalesForChord c
-                              , chords = nub $ c : (chordsForScale $ head $ scalesForChord c)
-                              , editingScale = e
-                              , editingChord = False }
+progressionStep :: Chord -> ProgressionStep
+progressionStep c = Step { scales = scalesForChord c
+                         , chords = nub $ c : (chordsForScale $ head $ scalesForChord c)
+                         }
+
+data EditField = EditScale | EditChord deriving Eq
 
 data State = State { quitting :: Bool
                    , progression :: [ProgressionStep]
                    , keys :: [Key]
                    , rows :: [ScaleRow]
                    , currentRow :: Int
+                   , editField :: EditField
                    } deriving Eq
 
 data Command = MoveStep Int | RotateStep Int | ToggleScaleChord | Quit
@@ -88,29 +89,28 @@ buildKeys row =
 
 moveStep :: Int -> State -> State
 moveStep delta state@State{progression = p, rows = rs, currentRow = i} =
-  let i' = max 0 $ min ((length p) - 1) $ i + delta
-      p' = case (i `compare` i', splitAt (min i i') p) of
-        (LT, (pre, (s@Step{editingScale = True}:s':post))) -> pre ++ (s{editingScale = False}:s'{editingScale = True}:post)
-        (GT, (pre, (s':s@Step{editingScale = True}:post))) -> pre ++ (s'{editingScale = True}:s{editingScale = False}:post)
-        (LT, (pre, (s@Step{editingChord = True}:s':post))) -> pre ++ (s{editingChord = False}:s'{editingChord = True}:post)
-        (GT, (pre, (s':s@Step{editingChord = True}:post))) -> pre ++ (s'{editingChord = True}:s{editingChord = False}:post)
-        _ -> p
-  in  state{progression = p', keys = buildKeys (rs !! i'), currentRow = i'}
+  let i' = (i + delta) `mod` (length p)
+  in  state{currentRow = i', keys = buildKeys (rs !! i')}
 
 rotateStep :: Int -> State -> State
-rotateStep delta state@State{progression = p, keys = ks, currentRow = i} =
-  let (pre, (s@Step{scales = scs, chords = chs, editingScale = es}:post)) = splitAt i p
-      p' = if es
-        then let scs' = rotate delta scs in pre ++ (s{scales = scs', chords = nub $ (head chs) : (chordsForScale $ head scs')}:post)
-        else let chs' = rotate delta chs in pre ++ (s{chords = chs', scales = nub $ (head scs) : (scalesForChord $ head chs')}:post)
+rotateStep delta state@State{progression = p, keys = ks, currentRow = i, editField = ef} =
+  let s@Step{scales = scs, chords = chs} = p !! i
+      p' = case ef of
+             EditScale -> let scs' = rotate delta scs 
+                              s' = s{scales = scs', chords = nub $ (head chs) : (chordsForScale $ head scs')}
+                          in  update i s' p
+             EditChord -> let chs' = rotate delta chs 
+                              s' = s{chords = chs', scales = nub $ (head scs) : (scalesForChord $ head chs')}
+                          in  update i s' p
       ns = map keyNote ks
       rows' = scaleRows ns $ map (head . scales) p'
   in  state{progression = p', rows = rows', keys = buildKeys (rows' !! i)}
 
 toggleScaleChord :: State -> State
-toggleScaleChord state@State{progression = p, currentRow = i} =
-  let (pre, (s@Step{editingScale = es, editingChord = ec}:post)) = splitAt i p
-  in state{progression = pre ++ (s{editingScale = not es, editingChord = not ec}:post)} where
+toggleScaleChord state@State{editField = ef} =
+  let ef' = case ef of EditScale -> EditChord
+                       _ -> EditScale
+  in state{editField = ef'}
 
 quit :: State -> State
 quit state = state{quitting = True}

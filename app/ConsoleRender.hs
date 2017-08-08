@@ -10,7 +10,7 @@ import System.Console.ANSI
 
 import Music (Note (..), isRoot)
 import Console (Command (..), Pos, Col (..), out, setColor)
-import App (State (..), Key (..), ProgressionStep (..), Role (..), ScaleRow (..), ScaleRowNote (..))
+import App (State (..), Key (..), ProgressionStep (..), Role (..), ScaleRow (..), ScaleRowNote (..), EditField (..))
 import Util (pad)
  
 -- [ "│  │░░░░││░░░░│ │ │░░░░││░░░░││░░░│ │  │░░░░││░░░░│ │ │░░░░││░░░░││░░░│ │"
@@ -27,8 +27,8 @@ defaultBg = (Col Dull Black)
 downArrow :: String
 downArrow = [chr 0x19]
 
-upArrow :: String
-upArrow = [chr 0x18]
+-- upArrow :: String
+-- upArrow = [chr 0x18]
 
 data KeyShape = CFKey | DAKey | EBKey | GKey | BlkKey
 
@@ -143,9 +143,9 @@ getRole curr len i | i == curr = This
                    | i == (curr + 1 + len) `mod` len = Next
                    | otherwise = None
 
-displayNotes :: Pos -> [ScaleRow] -> Int -> IO ()
-displayNotes pos scrs curr = do
-  displayNotes' pos (zip scrs $ map (getRole curr $ length scrs) [0..])
+displayNotes :: Pos -> State -> IO ()
+displayNotes pos state = do
+  displayNotes' pos (zip (rows state) $ map (getRole (currentRow state) $ length $ rows state) [0..])
   where
     displayNotes' :: Pos -> [(ScaleRow, Role)] -> IO ()
     displayNotes' _ [] = return ()
@@ -186,9 +186,9 @@ displayNotes pos scrs curr = do
                     _ -> bg
       in  setColor fg bg
 
-displayArrows :: Pos -> [ScaleRow] -> Int -> IO ()
-displayArrows pos scrs curr = do
-  displayArrows' pos (zip scrs $ map (getRole curr $ length scrs) [0..])
+displayArrows :: Pos -> State -> IO ()
+displayArrows pos state = do
+  displayArrows' pos (zip (rows state) $ map (getRole (currentRow state) $ length $ rows state) [0..])
   where
     displayArrows' :: Pos -> [(ScaleRow, Role)] -> IO ()
     displayArrows' _ [] = return ()
@@ -211,28 +211,42 @@ displayArrows pos scrs curr = do
         else cursorForward 3
       setColor defaultFg defaultBg
 
-displayRows ::Pos -> [ScaleRow] -> Int -> IO ()
-displayRows pos rs curr = do
-  displayNotes pos rs curr
-  displayArrows pos rs curr
+displayRows ::Pos -> State -> IO ()
+displayRows (x, y) state = do
+  setCursorPosition (y - 1) x
+  clearLines $ (length (rows state) + 1) * 2
+  displayScaleNames (x + (24*3 + 2), y) state
+  displayChordNames (x + (24*3 + 27), y) state
+  displayNotes (x, y) state
+  displayArrows (x, y) state
 
-displayScaleNames :: Pos -> [ProgressionStep] -> IO ()
-displayScaleNames (x, y) (Step{scales = s, editingScale = e}:ss) = do
-  setCursorPosition y x
-  clearFromCursorToLineEnd
-  if e then setColor (Col Dull Black) (Col Vivid White) else setColor (Col Vivid White) (Col Dull Black)
-  putStr $ show $ head s
-  displayScaleNames (x, y + 2) ss
-displayScaleNames _ _ = return ()
+displayScaleNames :: Pos -> State -> IO ()
+displayScaleNames pos State{progression = p, editField = e, currentRow = curr} =
+  displayScaleNames' pos (zip [0..] p) where
+    displayScaleNames' :: Pos -> [(Int, ProgressionStep)] -> IO ()
+    displayScaleNames' _ [] = return ()   
+    displayScaleNames' (x, y) ((i, Step{scales = s}):ss) = do
+      setCursorPosition y x
+      clearFromCursorToLineEnd
+      case (i == curr, e) of
+        (True, EditScale) -> setColor (Col Dull Black) (Col Vivid White) 
+        _                 -> setColor (Col Vivid White) (Col Dull Black)
+      putStr $ show $ head s
+      displayScaleNames' (x, y + 2) ss
 
-displayChordNames :: Pos -> [ProgressionStep] -> IO ()
-displayChordNames (x, y) (Step{chords = c, editingChord = e}:ss) = do
-  setCursorPosition y x
-  clearFromCursorToLineEnd
-  if e then setColor (Col Dull Black) (Col Vivid White) else setColor (Col Vivid White) (Col Dull Black)
-  putStr $ show $ head c
-  displayChordNames (x, y + 2) ss
-displayChordNames _ _ = return ()
+displayChordNames :: Pos -> State -> IO ()
+displayChordNames pos State{progression = p, editField = e, currentRow = curr} =
+  displayChordNames' pos (zip [0..] p) where
+    displayChordNames' :: Pos -> [(Int, ProgressionStep)] -> IO ()
+    displayChordNames' _ [] = return ()   
+    displayChordNames' (x, y) ((i, Step{chords = c}):ss) = do
+      setCursorPosition y x
+      clearFromCursorToLineEnd
+      case (i == curr, e) of
+        (True, EditChord) -> setColor (Col Dull Black) (Col Vivid White) 
+        _                 -> setColor (Col Vivid White) (Col Dull Black)
+      putStr $ show $ head c
+      displayChordNames' (x, y + 2) ss
 
 clearLines :: Int -> IO ()
 clearLines 0 = return ()
@@ -241,11 +255,4 @@ clearLines n = clearLine >> cursorDown 1 >> clearLines (n - 1)
 display :: State -> IO ()
 display state = do
   drawKeys (1, 1) $ keys state
-  display' (2, 9) where
-    display' :: Pos -> IO ()
-    display' (x, y) = do
-      setCursorPosition (y - 1) x
-      clearLines $ (length (rows state) + 1) * 2
-      displayRows (x, y) (rows state) (currentRow state)
-      displayScaleNames (x + (24*3 + 2), y) (progression state)
-      displayChordNames (x + (24*3 + 27), y) (progression state)
+  displayRows (2, 9) state
