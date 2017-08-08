@@ -127,15 +127,15 @@ drawKeys (x0, y0) ks = do
     getBlackKeyBg _                    = (Col Dull Black)
 
     drawWhiteKeyMarker :: (Bool, Bool, Bool) -> IO ()
-    drawWhiteKeyMarker (True, True, False) = cursorBackward 1 >> cursorUp 1 >> putStr upArrow
+    drawWhiteKeyMarker (True, True, False) = cursorBackward 1 >> cursorUp 1 >> putStr downArrow
     drawWhiteKeyMarker (False, True, True) = cursorBackward 1 >> cursorDown 1 >> putStr downArrow
-    drawWhiteKeyMarker (True, True, True)  = cursorBackward 1 >> cursorUp 1 >> putStr upArrow >> cursorDown 2 >> cursorBackward 1 >> putStr downArrow
+    drawWhiteKeyMarker (True, True, True)  = cursorBackward 1 >> cursorUp 1 >> putStr downArrow >> cursorDown 2 >> cursorBackward 1 >> putStr downArrow
     drawWhiteKeyMarker _                   = return ()
       
     drawBlackKeyMarker :: (Bool, Bool, Bool) -> IO ()
-    drawBlackKeyMarker (True, True, False) = cursorBackward 2 >> cursorUp 1 >> putStr upArrow
+    drawBlackKeyMarker (True, True, False) = cursorBackward 2 >> cursorUp 1 >> putStr downArrow
     drawBlackKeyMarker (False, True, True) = cursorBackward 2 >> cursorDown 1 >> putStr downArrow
-    drawBlackKeyMarker (True, True, True)  = cursorBackward 2 >> cursorUp 1 >> putStr upArrow >> cursorDown 2 >> cursorBackward 1 >> putStr downArrow
+    drawBlackKeyMarker (True, True, True)  = cursorBackward 2 >> cursorUp 1 >> putStr downArrow >> cursorDown 2 >> cursorBackward 1 >> putStr downArrow
     drawBlackKeyMarker _                   = return ()
 getRole :: Int -> Int -> Int -> Role
 getRole curr len i | i == curr = This
@@ -207,8 +207,7 @@ displayArrows pos scrs curr = do
                              This -> (Col Vivid Red)
                              _ -> (Col Vivid White)) (Col Dull Black)
       if (inThis && inNext)
-        then putStr (case role of Prev -> upArrow
-                                  _ -> downArrow) >> cursorForward 2
+        then putStr downArrow >> cursorForward 2
         else cursorForward 3
       setColor defaultFg defaultBg
 

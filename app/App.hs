@@ -13,7 +13,7 @@ module App
   , buildKeys
   ) where
 
-import Data.List (findIndex, nub)
+import Data.List (nub)
 
 import Music (Note (..), Chord (..), Scale (..), inScale, scalesForChord, chordsForScale)
 import Util (rotate)
@@ -87,9 +87,8 @@ buildKeys row =
     buildKey (ScaleRowNote {note = n, sharing' = sh}) = Key { keyNote = n, pressed = False, sharing = sh }
 
 moveStep :: Int -> State -> State
-moveStep delta state@State{progression = p, rows = rs} =
-  let i = maybe (length p) id $ findIndex (\x -> editingScale x || editingChord x) p
-      i' = max 0 $ min ((length p) - 1) $ i + delta
+moveStep delta state@State{progression = p, rows = rs, currentRow = i} =
+  let i' = max 0 $ min ((length p) - 1) $ i + delta
       p' = case (i `compare` i', splitAt (min i i') p) of
         (LT, (pre, (s@Step{editingScale = True}:s':post))) -> pre ++ (s{editingScale = False}:s'{editingScale = True}:post)
         (GT, (pre, (s':s@Step{editingScale = True}:post))) -> pre ++ (s'{editingScale = True}:s{editingScale = False}:post)
@@ -99,9 +98,8 @@ moveStep delta state@State{progression = p, rows = rs} =
   in  state{progression = p', keys = buildKeys (rs !! i'), currentRow = i'}
 
 rotateStep :: Int -> State -> State
-rotateStep delta state@State{progression = p, keys = ks} =
-  let i = maybe (length p) id $ findIndex (\x -> editingScale x || editingChord x) p
-      (pre, (s@Step{scales = scs, chords = chs, editingScale = es}:post)) = splitAt i p
+rotateStep delta state@State{progression = p, keys = ks, currentRow = i} =
+  let (pre, (s@Step{scales = scs, chords = chs, editingScale = es}:post)) = splitAt i p
       p' = if es
         then let scs' = rotate delta scs in pre ++ (s{scales = scs', chords = nub $ (head chs) : (chordsForScale $ head scs')}:post)
         else let chs' = rotate delta chs in pre ++ (s{chords = chs', scales = nub $ (head scs) : (scalesForChord $ head chs')}:post)
@@ -110,9 +108,8 @@ rotateStep delta state@State{progression = p, keys = ks} =
   in  state{progression = p', rows = rows', keys = buildKeys (rows' !! i)}
 
 toggleScaleChord :: State -> State
-toggleScaleChord state@State{progression = p} =
-  let i = maybe (length p) id $ findIndex (\x -> editingScale x || editingChord x) p
-      (pre, (s@Step{editingScale = es, editingChord = ec}:post)) = splitAt i p
+toggleScaleChord state@State{progression = p, currentRow = i} =
+  let (pre, (s@Step{editingScale = es, editingChord = ec}:post)) = splitAt i p
   in state{progression = pre ++ (s{editingScale = not es, editingChord = not ec}:post)} where
 
 quit :: State -> State
