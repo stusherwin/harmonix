@@ -231,9 +231,15 @@ displayChordNames (x, y) (Step{chords = c, editingChord = e}:ss) = do
   putStr $ show $ head c
   displayChordNames (x, y + 2) ss
 displayChordNames _ _ = return ()
-  
+
+clearLines :: Int -> IO ()
+clearLines 0 = return ()
+clearLines n = clearLine >> cursorDown 1 >> clearLines (n - 1)
+
 displayRows :: [Note] -> Pos -> [ProgressionStep] -> IO ()
-displayRows ns (x, y) steps@(s1:s2:ss) = do
+displayRows ns (x, y) steps@(s1:s2:_) = do
+  setCursorPosition (y - 1) x
+  clearLines $ (length steps + 1) * 2
   displayScaleNames (x + (24*3 + 2), y) steps
   displayChordNames (x + (24*3 + 27), y) steps
   let lastStep = last steps
@@ -249,6 +255,7 @@ displayRows ns (x, y) steps@(s1:s2:ss) = do
             (_, True, _) -> This 
             (_, _, True) -> Prev
             _         -> None
+
 displayRows _ _ _ = return ()
 
 display :: State -> IO ()
