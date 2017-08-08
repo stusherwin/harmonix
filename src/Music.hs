@@ -10,6 +10,7 @@ module Music
   , scalesForProgression
   , inScale
   , chordsForScale
+  , isRoot
   ) where
 
 import Data.List
@@ -178,3 +179,5 @@ commonNotes a b = sort $ scaleNotes a `intersect` scaleNotes b
 scalesForProgression :: Chord -> Chord -> [(Scale, Scale, [Note])]
 scalesForProgression a b = reverse $ sortOn (\(_, _, n) -> length n) [(sa, sb, commonNotes sa sb) | sa <- scalesForChord a, sb <- scalesForChord b]
 
+isRoot :: Scale -> Note -> Bool
+isRoot (Scale root _) n = n == root
