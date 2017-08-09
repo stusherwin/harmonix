@@ -1,11 +1,10 @@
 module ConsoleRender 
-  ( display
+  ( render
   ) where
 
 import Control.Monad (when)
 import Control.Applicative (ZipList (..), (<$>), (<*>))
 import Data.Char (chr)
-import Data.List (find)
 import System.Console.ANSI
 
 import Music (Note (..), isRoot)
@@ -33,8 +32,8 @@ downArrow = [chr 0x19]
 data KeyShape = CFKey | DAKey | EBKey | GKey | BlkKey
 data KeyType = WhiteKey | BlackKey
 
-drawKeyShape :: KeyShape -> String -> Pos -> (Col, Col) -> IO ()
-drawKeyShape CFKey n p c = out $ Jmp p
+renderKeyShape :: KeyShape -> String -> Pos -> (Col, Col) -> IO ()
+renderKeyShape CFKey n p c = out $ Jmp p
                                     : Pn c "│  "
                                     : Pn c "│  "
                                     : Pn c "│  "
@@ -45,7 +44,7 @@ drawKeyShape CFKey n p c = out $ Jmp p
                                     : Mv 1 (-2) : P c n
                                     : []
 
-drawKeyShape DAKey n p c = out $ Jmp p : Mv 1 0
+renderKeyShape DAKey n p c = out $ Jmp p : Mv 1 0
                                     : Pn c   "  "
                                     : Pn c   "  "
                                     : Pn c   "  "
@@ -56,7 +55,7 @@ drawKeyShape DAKey n p c = out $ Jmp p : Mv 1 0
                                     : Mv 2 (-2) : P c n
                                     : []
 
-drawKeyShape EBKey n p c = out $ Jmp p : Mv 1 0
+renderKeyShape EBKey n p c = out $ Jmp p : Mv 1 0
                                     : Pn c    "  "
                                     : Pn c    "  "
                                     : Pn c    "  "
@@ -67,7 +66,7 @@ drawKeyShape EBKey n p c = out $ Jmp p : Mv 1 0
                                     : Mv 3 (-2) : P c n
                                     : []
 
-drawKeyShape GKey n p c = out $ Jmp p : Mv 1 0
+renderKeyShape GKey n p c = out $ Jmp p : Mv 1 0
                                   : Pn c   "  "
                                   : Pn c   "  "
                                   : Pn c   "  "
@@ -78,7 +77,7 @@ drawKeyShape GKey n p c = out $ Jmp p : Mv 1 0
                                   : Mv 2 (-2) : P c n
                                   : []
 
-drawKeyShape BlkKey n p c = out $ Jmp p
+renderKeyShape BlkKey n p c = out $ Jmp p
                                     : Pn c "    "
                                     : Pn c "    "
                                     : Pn c " Eb "
@@ -86,29 +85,29 @@ drawKeyShape BlkKey n p c = out $ Jmp p
                                     : Mv 1 (-2) : P c n 
                                     : []
 
-drawKeys :: Pos -> [Key] -> IO ()
-drawKeys (x0, y0) ks = do
-  sequence_ $ getZipList $ drawKey <$> ZipList ks
+renderKeys :: Pos -> [Key] -> IO ()
+renderKeys (x0, y0) ks = do
+  sequence_ $ getZipList $ renderKey <$> ZipList ks
                                    <*> ZipList [(x0 + i, y0) | i <- [0, 3 ..]]
                                    <*> ZipList (True : repeat False)
   setColor (Col Vivid White) (Col Dull Black)
   setCursorPosition (y0 + 7) x0 where
-    drawKey :: Key -> Pos -> Bool -> IO ()
-    drawKey Key{keyNote = C, sharing = sh} p isFirst = do
+    renderKey :: Key -> Pos -> Bool -> IO ()
+    renderKey Key{keyNote = C, sharing = sh} p isFirst = do
       let c = col WhiteKey sh 
-      drawKeyShape CFKey "C" p c >> drawMarker WhiteKey sh
+      renderKeyShape CFKey "C" p c >> renderMarker WhiteKey sh
       when isFirst (out $ Jmp p : (take 7 $ repeat $ Pn c " "))
-    drawKey Key{keyNote = Cs, sharing = sh} p _ = drawKeyShape BlkKey "C#" p (col BlackKey sh) >> drawMarker BlackKey sh
-    drawKey Key{keyNote = D,  sharing = sh} p _ = drawKeyShape DAKey  "D"  p (col WhiteKey sh) >> drawMarker WhiteKey sh
-    drawKey Key{keyNote = Eb, sharing = sh} p _ = drawKeyShape BlkKey "Eb" p (col BlackKey sh) >> drawMarker BlackKey sh
-    drawKey Key{keyNote = E,  sharing = sh} p _ = drawKeyShape EBKey  "E"  p (col WhiteKey sh) >> drawMarker WhiteKey sh
-    drawKey Key{keyNote = F,  sharing = sh} p _ = drawKeyShape CFKey  "F"  p (col WhiteKey sh) >> drawMarker WhiteKey sh
-    drawKey Key{keyNote = Fs, sharing = sh} p _ = drawKeyShape BlkKey "F#" p (col BlackKey sh) >> drawMarker BlackKey sh
-    drawKey Key{keyNote = G,  sharing = sh} p _ = drawKeyShape GKey   "G"  p (col WhiteKey sh) >> drawMarker WhiteKey sh
-    drawKey Key{keyNote = Ab, sharing = sh} p _ = drawKeyShape BlkKey "Ab" p (col BlackKey sh) >> drawMarker BlackKey sh
-    drawKey Key{keyNote = A,  sharing = sh} p _ = drawKeyShape DAKey  "A"  p (col WhiteKey sh) >> drawMarker WhiteKey sh
-    drawKey Key{keyNote = Bb, sharing = sh} p _ = drawKeyShape BlkKey "Bb" p (col BlackKey sh) >> drawMarker BlackKey sh
-    drawKey Key{keyNote = B,  sharing = sh} p _ = drawKeyShape EBKey  "B"  p (col WhiteKey sh) >> drawMarker WhiteKey sh
+    renderKey Key{keyNote = Cs, sharing = sh} p _ = renderKeyShape BlkKey "C#" p (col BlackKey sh) >> renderMarker BlackKey sh
+    renderKey Key{keyNote = D,  sharing = sh} p _ = renderKeyShape DAKey  "D"  p (col WhiteKey sh) >> renderMarker WhiteKey sh
+    renderKey Key{keyNote = Eb, sharing = sh} p _ = renderKeyShape BlkKey "Eb" p (col BlackKey sh) >> renderMarker BlackKey sh
+    renderKey Key{keyNote = E,  sharing = sh} p _ = renderKeyShape EBKey  "E"  p (col WhiteKey sh) >> renderMarker WhiteKey sh
+    renderKey Key{keyNote = F,  sharing = sh} p _ = renderKeyShape CFKey  "F"  p (col WhiteKey sh) >> renderMarker WhiteKey sh
+    renderKey Key{keyNote = Fs, sharing = sh} p _ = renderKeyShape BlkKey "F#" p (col BlackKey sh) >> renderMarker BlackKey sh
+    renderKey Key{keyNote = G,  sharing = sh} p _ = renderKeyShape GKey   "G"  p (col WhiteKey sh) >> renderMarker WhiteKey sh
+    renderKey Key{keyNote = Ab, sharing = sh} p _ = renderKeyShape BlkKey "Ab" p (col BlackKey sh) >> renderMarker BlackKey sh
+    renderKey Key{keyNote = A,  sharing = sh} p _ = renderKeyShape DAKey  "A"  p (col WhiteKey sh) >> renderMarker WhiteKey sh
+    renderKey Key{keyNote = Bb, sharing = sh} p _ = renderKeyShape BlkKey "Bb" p (col BlackKey sh) >> renderMarker BlackKey sh
+    renderKey Key{keyNote = B,  sharing = sh} p _ = renderKeyShape EBKey  "B"  p (col WhiteKey sh) >> renderMarker WhiteKey sh
     
     col :: KeyType -> (Bool, Bool, Bool) -> (Col, Col)
     col WhiteKey (True, True, False)  = (Col Dull Black,  Col Vivid Green)
@@ -122,14 +121,14 @@ drawKeys (x0, y0) ks = do
     col BlackKey (True, True, True)   = (Col Vivid White, Col Dull Yellow)
     col BlackKey _                    = (Col Vivid White, Col Dull Black)
 
-    drawMarker :: KeyType -> (Bool, Bool, Bool) -> IO ()
-    drawMarker WhiteKey (True, True, False) = cursorBackward 1 >> cursorUp 1   >> putStr downArrow
-    drawMarker WhiteKey (False, True, True) = cursorBackward 1 >> cursorDown 1 >> putStr downArrow
-    drawMarker WhiteKey (True, True, True)  = cursorBackward 1 >> cursorUp 1   >> putStr downArrow >> cursorDown 2 >> cursorBackward 1 >> putStr downArrow
-    drawMarker BlackKey (True, True, False) = cursorBackward 2 >> cursorUp 1   >> putStr downArrow
-    drawMarker BlackKey (False, True, True) = cursorBackward 2 >> cursorDown 1 >> putStr downArrow
-    drawMarker BlackKey (True, True, True)  = cursorBackward 2 >> cursorUp 1   >> putStr downArrow >> cursorDown 2 >> cursorBackward 1 >> putStr downArrow
-    drawMarker _ _                   = return ()
+    renderMarker :: KeyType -> (Bool, Bool, Bool) -> IO ()
+    renderMarker WhiteKey (True, True, False) = cursorBackward 1 >> cursorUp 1   >> putStr downArrow
+    renderMarker WhiteKey (False, True, True) = cursorBackward 1 >> cursorDown 1 >> putStr downArrow
+    renderMarker WhiteKey (True, True, True)  = cursorBackward 1 >> cursorUp 1   >> putStr downArrow >> cursorDown 2 >> cursorBackward 1 >> putStr downArrow
+    renderMarker BlackKey (True, True, False) = cursorBackward 2 >> cursorUp 1   >> putStr downArrow
+    renderMarker BlackKey (False, True, True) = cursorBackward 2 >> cursorDown 1 >> putStr downArrow
+    renderMarker BlackKey (True, True, True)  = cursorBackward 2 >> cursorUp 1   >> putStr downArrow >> cursorDown 2 >> cursorBackward 1 >> putStr downArrow
+    renderMarker _ _                   = return ()
 
 getRole :: Int -> Int -> Int -> Role
 getRole curr len i | i == curr = This
@@ -137,25 +136,25 @@ getRole curr len i | i == curr = This
                    | i == (curr + 1 + len) `mod` len = Next
                    | otherwise = None
 
-displayNotes :: Pos -> State -> IO ()
-displayNotes pos state = do
-  displayNotes' pos True (zip3 prevs rs $ map (getRole (currentRow state) $ length $ rs) [0..])
+renderNotes :: Pos -> State -> IO ()
+renderNotes pos state = do
+  renderNotes' pos True (zip3 prevs rs $ map (getRole (currentRow state) $ length $ rs) [0..])
   where
     rs = rows state
     prevs = last rs : rs
-    displayNotes' :: Pos -> Bool -> [(ScaleRow, ScaleRow, Role)] -> IO ()
-    displayNotes' _ _ [] = return ()
-    displayNotes' (x, y) isFirstRow ((prev, this, role):rest) = do
-      displayNoteRow (x, y) isFirstRow prev this role
-      displayNotes' (x, y + 2) False rest
+    renderNotes' :: Pos -> Bool -> [(ScaleRow, ScaleRow, Role)] -> IO ()
+    renderNotes' _ _ [] = return ()
+    renderNotes' (x, y) isFirstRow ((prev, this, role):rest) = do
+      renderNoteRow (x, y) isFirstRow prev this role
+      renderNotes' (x, y + 2) False rest
 
-    displayNoteRow :: Pos -> Bool -> ScaleRow -> ScaleRow -> Role -> IO ()
-    displayNoteRow (x, y) isFirstRow prev this role = do
+    renderNoteRow :: Pos -> Bool -> ScaleRow -> ScaleRow -> Role -> IO ()
+    renderNoteRow (x, y) isFirstRow prev this role = do
       setCursorPosition y x
-      sequence_ $ map (displayNote isFirstRow prev this role) $ (notes prev `zip` notes this)
+      sequence_ $ map (renderNote isFirstRow prev this role) $ (notes prev `zip` notes this)
   
-    displayNote :: Bool -> ScaleRow -> ScaleRow -> Role -> (ScaleRowNote, ScaleRowNote) -> IO ()
-    displayNote isFirstRow prev this role (ScaleRowNote {marked = prevMarked}, ScaleRowNote {note = n, marked = m, sharing' = sh@(_, inThis, _)}) = do
+    renderNote :: Bool -> ScaleRow -> ScaleRow -> Role -> (ScaleRowNote, ScaleRowNote) -> IO ()
+    renderNote isFirstRow prev this role (ScaleRowNote {marked = prevMarked}, ScaleRowNote {note = n, marked = m, sharing' = sh@(_, inThis, _)}) = do
       setNoteColor role sh
       putStr (pad 3 $ if inThis then show $ n else "")
       setColor (Col Vivid Black) (Col Dull Black)
@@ -206,23 +205,23 @@ displayNotes pos state = do
                     _ -> bg
       in  setColor fg bg
 
-displayArrows :: Pos -> State -> IO ()
-displayArrows pos state = do
-  displayArrows' pos (zip (rows state) $ map (getRole (currentRow state) $ length $ rows state) [0..])
+renderArrows :: Pos -> State -> IO ()
+renderArrows pos state = do
+  renderArrows' pos (zip (rows state) $ map (getRole (currentRow state) $ length $ rows state) [0..])
   where
-    displayArrows' :: Pos -> [(ScaleRow, Role)] -> IO ()
-    displayArrows' _ [] = return ()
-    displayArrows' (x, y) ((r, role):rs) = do
-      displayArrowRow (x, y) r role
-      displayArrows' (x, y + 2) rs
+    renderArrows' :: Pos -> [(ScaleRow, Role)] -> IO ()
+    renderArrows' _ [] = return ()
+    renderArrows' (x, y) ((r, role):rs) = do
+      renderArrowRow (x, y) r role
+      renderArrows' (x, y + 2) rs
 
-    displayArrowRow :: Pos -> ScaleRow -> Role -> IO ()
-    displayArrowRow (x, y) row role = do
+    renderArrowRow :: Pos -> ScaleRow -> Role -> IO ()
+    renderArrowRow (x, y) row role = do
       setCursorPosition (y + 1) x
-      sequence_ $ map (displayArrow role) $ notes row
+      sequence_ $ map (renderArrow role) $ notes row
       
-    displayArrow :: Role -> ScaleRowNote -> IO ()
-    displayArrow role (ScaleRowNote {sharing' = (_, inThis, inNext)}) = do
+    renderArrow :: Role -> ScaleRowNote -> IO ()
+    renderArrow role (ScaleRowNote {sharing' = (_, inThis, inNext)}) = do
       setColor (case role of Prev -> (Col Vivid Green)
                              This -> (Col Vivid Red)
                              _ -> (Col Vivid White)) (Col Dull Black)
@@ -231,48 +230,48 @@ displayArrows pos state = do
         else cursorForward 3
       setColor defaultFg defaultBg
 
-displayRows ::Pos -> State -> IO ()
-displayRows (x, y) state = do
+renderRows ::Pos -> State -> IO ()
+renderRows (x, y) state = do
   setCursorPosition (y - 1) x
   clearLines $ (length (rows state) + 1) * 2
-  displayScaleNames (x + (24*3 + 2), y) state
-  displayChordNames (x + (24*3 + 27), y) state
-  displayNotes (x, y) state
-  displayArrows (x, y) state
+  renderScaleNames (x + (24*3 + 2), y) state
+  renderChordNames (x + (24*3 + 27), y) state
+  renderNotes (x, y) state
+  renderArrows (x, y) state
 
-displayScaleNames :: Pos -> State -> IO ()
-displayScaleNames pos State{progression = p, editField = e, currentRow = curr} =
-  displayScaleNames' pos (zip [0..] p) where
-    displayScaleNames' :: Pos -> [(Int, ProgressionStep)] -> IO ()
-    displayScaleNames' _ [] = return ()   
-    displayScaleNames' (x, y) ((i, Step{scales = s}):ss) = do
+renderScaleNames :: Pos -> State -> IO ()
+renderScaleNames pos State{progression = p, editField = e, currentRow = curr} =
+  renderScaleNames' pos (zip [0..] p) where
+    renderScaleNames' :: Pos -> [(Int, ProgressionStep)] -> IO ()
+    renderScaleNames' _ [] = return ()   
+    renderScaleNames' (x, y) ((i, Step{scales = s}):ss) = do
       setCursorPosition y x
       clearFromCursorToLineEnd
       case (i == curr, e) of
         (True, EditScale) -> setColor (Col Dull Black) (Col Vivid White) 
         _                 -> setColor (Col Vivid White) (Col Dull Black)
       putStr $ show $ head s
-      displayScaleNames' (x, y + 2) ss
+      renderScaleNames' (x, y + 2) ss
 
-displayChordNames :: Pos -> State -> IO ()
-displayChordNames pos State{progression = p, editField = e, currentRow = curr} =
-  displayChordNames' pos (zip [0..] p) where
-    displayChordNames' :: Pos -> [(Int, ProgressionStep)] -> IO ()
-    displayChordNames' _ [] = return ()   
-    displayChordNames' (x, y) ((i, Step{chords = c}):ss) = do
+renderChordNames :: Pos -> State -> IO ()
+renderChordNames pos State{progression = p, editField = e, currentRow = curr} =
+  renderChordNames' pos (zip [0..] p) where
+    renderChordNames' :: Pos -> [(Int, ProgressionStep)] -> IO ()
+    renderChordNames' _ [] = return ()   
+    renderChordNames' (x, y) ((i, Step{chords = c}):ss) = do
       setCursorPosition y x
       clearFromCursorToLineEnd
       case (i == curr, e) of
         (True, EditChord) -> setColor (Col Dull Black) (Col Vivid White) 
         _                 -> setColor (Col Vivid White) (Col Dull Black)
       putStr $ show $ head c
-      displayChordNames' (x, y + 2) ss
+      renderChordNames' (x, y + 2) ss
 
 clearLines :: Int -> IO ()
 clearLines 0 = return ()
 clearLines n = clearLine >> cursorDown 1 >> clearLines (n - 1)
 
-display :: State -> IO ()
-display state = do
-  drawKeys (1, 1) $ keys state
-  displayRows (2, 9) state
+render :: State -> IO ()
+render state = do
+  renderKeys (1, 1) $ keys state
+  renderRows (2, 9) state

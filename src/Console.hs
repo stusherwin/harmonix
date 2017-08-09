@@ -4,6 +4,7 @@ module Console
   , Pos 
   , setColor
   , out
+  , clearRect
   ) where
 
 import System.Console.ANSI
@@ -35,3 +36,12 @@ out = mapM_ out' where
     putStrMask mask (fg, bg) rest where
       (masked, str') = span (== mask) str
       (text, rest) = break (== mask) str'
+
+clearRect :: Pos -> (Int, Int) -> IO ()
+clearRect (x, y) rect = setCursorPosition y x >> clearRect' rect >> setCursorPosition y x
+  where
+    clearRect' (_, 0) = return ()
+    clearRect' (len, n) = do
+      putStr $ take len $ repeat ' '
+      cursorDown 1
+      clearRect' (len, n -1)

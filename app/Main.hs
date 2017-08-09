@@ -8,7 +8,7 @@ import Control.Monad (when)
 import System.IO (hSetEcho, stdin, hSetBuffering, stdout, BufferMode (..))
 
 import Music (Note (..), Chord (..), ChordType (..), notes)
-import ConsoleRender (display)
+import ConsoleRender (render)
 import App (State (..), Command (..), ProgressionStep (..), EditField (..), progressionStep, handleCommand, key, scaleRows)
 
 getHiddenChar = fmap (chr.fromEnum) c_getch
@@ -40,7 +40,7 @@ main = do
   hSetBuffering stdin NoBuffering
   hSetBuffering stdout NoBuffering
   setSGR [Reset] >> clearScreen >> setCursorPosition 0 0
-  display initState
+  render initState
   inputLoop initState
     where
       inputLoop :: State -> IO()
@@ -54,7 +54,7 @@ main = do
                       '\t' -> Just $ ToggleScaleChord
                       'q' ->  Just $ Quit
                       _   ->  Nothing
-        let newState = maybe state (\com -> handleCommand com state) command
-        when ((not . quitting) newState) $ do
-          when (newState /= state) (display newState)
-          inputLoop newState
+        let state' = maybe state (\com -> handleCommand com state) command
+        when ((not . quitting) state') $ do
+          when (state' /= state) (render state')
+          inputLoop state'
