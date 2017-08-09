@@ -5,7 +5,7 @@ module ConsoleRender
 import Control.Monad (when)
 import Control.Applicative (ZipList (..), (<$>), (<*>))
 import Data.Char (chr)
-
+import Data.List (find)
 import System.Console.ANSI
 
 import Music (Note (..), isRoot)
@@ -139,31 +139,57 @@ getRole curr len i | i == curr = This
 
 displayNotes :: Pos -> State -> IO ()
 displayNotes pos state = do
-  displayNotes' pos (zip (rows state) $ map (getRole (currentRow state) $ length $ rows state) [0..])
+  displayNotes' pos True (zip3 prevs rs $ map (getRole (currentRow state) $ length $ rs) [0..])
   where
-    displayNotes' :: Pos -> [(ScaleRow, Role)] -> IO ()
-    displayNotes' _ [] = return ()
-    displayNotes' (x, y) ((r, role):rs) = do
-      displayNoteRow (x, y) r role
-      displayNotes' (x, y + 2) rs
+    rs = rows state
+    prevs = last rs : rs
+    displayNotes' :: Pos -> Bool -> [(ScaleRow, ScaleRow, Role)] -> IO ()
+    displayNotes' _ _ [] = return ()
+    displayNotes' (x, y) isFirstRow ((prev, this, role):rest) = do
+      displayNoteRow (x, y) isFirstRow prev this role
+      displayNotes' (x, y + 2) False rest
 
-    displayNoteRow :: Pos -> ScaleRow -> Role -> IO ()
-    displayNoteRow (x, y) row role = do
+    displayNoteRow :: Pos -> Bool -> ScaleRow -> ScaleRow -> Role -> IO ()
+    displayNoteRow (x, y) isFirstRow prev this role = do
       setCursorPosition y x
-      sequence_ $ map (displayNote row role) $ notes row
+      sequence_ $ map (displayNote isFirstRow prev this role) $ (notes prev `zip` notes this)
   
-    displayNote :: ScaleRow -> Role -> ScaleRowNote -> IO ()
-    displayNote this role (ScaleRowNote {note = n, marked = m, sharing' = sh@(_, inThis, _)}) = do
+    displayNote :: Bool -> ScaleRow -> ScaleRow -> Role -> (ScaleRowNote, ScaleRowNote) -> IO ()
+    displayNote isFirstRow prev this role (ScaleRowNote {marked = prevMarked}, ScaleRowNote {note = n, marked = m, sharing' = sh@(_, inThis, _)}) = do
       setNoteColor role sh
       putStr (pad 3 $ if inThis then show $ n else "")
       setColor (Col Vivid Black) (Col Dull Black)
       when (isRoot (scale this) n) $ do
         cursorBackward 4
         putStr "│"
-        if m
-          then cursorBackward 1 >> cursorUp 1 >> putStr "┌" >> cursorBackward 1 >> cursorDown 2 >> putStr "└" >> cursorUp 1 >> cursorForward 3
-          else cursorBackward 1 >> cursorUp 1 >> putStr "┐" >> cursorBackward 1 >> cursorDown 2 >> putStr "┘" >> cursorUp 1 >> cursorForward 3
-      when m $ cursorBackward 3 >> cursorUp 1 >> putStr "───" >> cursorBackward 3 >> cursorDown 2 >> putStr "───" >> cursorUp 1
+        cursorForward 3
+      let top = case (isFirstRow, prevMarked, isRoot (scale prev) n, m, isRoot (scale this) n) of
+                      (False, True, True, True, True) -> "├"
+                      (False, False, False, True, True) -> "┌"
+                      (False, True, False, True, True) -> "┬"
+                      (False, True, True, True, False) -> "┴"
+                      (False, False, False, False, True) -> "┐"
+                      (False, False, True, False, True) -> "┤"
+                      (False, True, False, False, True) -> "┬"
+                      (False, False, True, False, False) -> "┘"
+                      (False, True, True, False, False) -> "└"
+                      (False, False, True, True, False) -> "┴"
+                      (False, False, False, False, False) -> " "
+                      (False, True, False, True, False) -> "─"
+                      (False, True, False, False, False) -> "─"
+                      (False, False, False, True, False) -> "─"
+                      (True, _, _, True, True)  -> "┌"
+                      (True, _, _, False, True) -> "┐"
+                      (True, _, _, True, False) -> "─"
+                      (True, _, _, _, _)        -> " "
+                      _ -> "?"
+      let bottom = case (m, isRoot (scale this) n) of
+                      (True, True) -> "└"
+                      (False, True) -> "┘"
+                      (True, False) -> "─"
+                      _ -> " "
+      cursorBackward 4 >> cursorUp 1 >> putStr top >> cursorBackward 1 >> cursorDown 2 >> putStr bottom >> cursorUp 1 >> cursorForward 3
+      when m $ cursorBackward 3 >> cursorUp 1 >> putStr "──" >> cursorBackward 2 >> cursorDown 2 >> putStr "──" >> cursorUp 1 >> cursorForward 1
       setColor defaultFg defaultBg
   
     setNoteColor :: Role -> (Bool, Bool, Bool) -> IO ()
