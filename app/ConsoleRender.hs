@@ -95,7 +95,7 @@ renderKeys (x0, y0) state = do
   where
     cr = rows state !! currentRow state
     ks = zip (keys state) (notes cr)
-    i = styleIndex cr
+    ix = styleIndex cr
     renderKey :: (Key, ScaleRowNote) -> Pos -> Bool -> IO ()
     renderKey (Key{keyNote = C}, ScaleRowNote {sharing = sh}) p isFirst = do
       let c = col WhiteKey sh
@@ -114,9 +114,9 @@ renderKeys (x0, y0) state = do
     renderKey (Key{keyNote = B},  ScaleRowNote {sharing = sh}) p _ = renderKeyShape EBKey  "B"  p (col WhiteKey sh) >> renderMarker WhiteKey sh
     
     col :: KeyType -> (Bool, Bool, Bool) -> (Col, Col)
-    col WhiteKey (_, True, _) = (Col Dull Black, styleIndexColor Vivid i)
+    col WhiteKey (_, True, _) = (Col Dull Black, styleIndexColor Vivid ix)
     col WhiteKey _ = (Col Dull Black, Col Vivid White)
-    col BlackKey (_, True, _) = (Col Vivid White, styleIndexColor Dull i)
+    col BlackKey (_, True, _) = (Col Vivid White, styleIndexColor Dull ix)
     col BlackKey _ = (Col Vivid White, Col Dull Black)
 
     renderMarker :: KeyType -> (Bool, Bool, Bool) -> IO ()
@@ -240,30 +240,32 @@ renderRows (x, y) state = do
   renderArrows (x, y) state
 
 renderScaleNames :: Pos -> State -> IO ()
-renderScaleNames pos State{progression = p, editField = e, currentRow = curr} =
+renderScaleNames pos State{progression = p, editField = e, currentRow = curr, rows = rs} =
   renderScaleNames' pos (zip [0..] p) where
     renderScaleNames' :: Pos -> [(Int, ProgressionStep)] -> IO ()
     renderScaleNames' _ [] = return ()   
     renderScaleNames' (x, y) ((i, Step{scales = s}):ss) = do
+      let ix = styleIndex $ rs !! i
       setCursorPosition y x
       clearFromCursorToLineEnd
       case (i == curr, e) of
-        (True, EditScale) -> setColor (Col Dull Black) (Col Vivid White) 
-        _                 -> setColor (Col Vivid White) (Col Dull Black)
+        (True, EditScale) -> setColor (Col Dull Black) (styleIndexColor Vivid ix) 
+        _                 -> setColor (styleIndexColor Vivid ix) (Col Dull Black)
       putStr $ show $ head s
       renderScaleNames' (x, y + 2) ss
 
 renderChordNames :: Pos -> State -> IO ()
-renderChordNames pos State{progression = p, editField = e, currentRow = curr} =
+renderChordNames pos State{progression = p, editField = e, currentRow = curr, rows = rs} =
   renderChordNames' pos (zip [0..] p) where
     renderChordNames' :: Pos -> [(Int, ProgressionStep)] -> IO ()
     renderChordNames' _ [] = return ()   
     renderChordNames' (x, y) ((i, Step{chords = c}):ss) = do
+      let ix = styleIndex $ rs !! i
       setCursorPosition y x
       clearFromCursorToLineEnd
       case (i == curr, e) of
-        (True, EditChord) -> setColor (Col Dull Black) (Col Vivid White) 
-        _                 -> setColor (Col Vivid White) (Col Dull Black)
+        (True, EditChord) -> setColor (Col Dull Black) (styleIndexColor Vivid ix)  
+        _                 -> setColor (styleIndexColor Vivid ix) (Col Dull Black)
       putStr $ show $ head c
       renderChordNames' (x, y + 2) ss
 
