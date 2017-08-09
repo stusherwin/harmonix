@@ -23,32 +23,36 @@ data Role = Prev | This | Next | None deriving Eq
 
 data Key = Key { keyNote :: Note
                , pressed :: Bool
-               , sharing :: (Bool, Bool, Bool)
                } deriving (Eq, Show)
 
 key :: Note -> Bool -> Key
-key n pr = Key { keyNote = n, pressed = pr, sharing = (False, False, False) }
+key n pr = Key { keyNote = n, pressed = pr }
 
 data ScaleRowNote = ScaleRowNote { note :: Note
                                  , marked :: Bool
-                                 , sharing' :: (Bool, Bool, Bool)
+                                 , sharing :: (Bool, Bool, Bool)
                                  } deriving (Eq, Show)
 
 data ScaleRow = ScaleRow { scale :: Scale
                          , notes :: [ScaleRowNote]
+                         , styleIndex :: Int
                          } deriving (Eq, Show)
 
 scaleRows :: [Note] -> [Scale] -> [ScaleRow]
-scaleRows ns scs = scaleRows' (last scs:scs) (length scs) where
-  scaleRows' :: [Scale] -> Int -> [ScaleRow]
+scaleRows ns scs = scaleRows' (zip (last scs:scs) (cycle [0..3])) (length scs) where
+  scaleRows' :: [(Scale, Int)] -> Int -> [ScaleRow]
   scaleRows' [] _       = error "Not enough scales"
   scaleRows' (_:[]) _   = error "Not enough scales"
   scaleRows' (_:_:[]) _ = error "Not enough scales"
   scaleRows' _ 0        = []
   scaleRows' ss@(s1:s2:s3:_) n = scaleRow (s1, s2, s3) : scaleRows' (rotate 1 ss) (n - 1)
 
-  scaleRow :: (Scale, Scale, Scale) -> ScaleRow
-  scaleRow (prev, this@(Scale root _), next) = ScaleRow { scale = this, notes = reverse . foldl scaleRowNotes [] $ ns }
+  scaleRow :: ((Scale, Int), (Scale, Int), (Scale, Int)) -> ScaleRow
+  scaleRow ((prev, _), (this@(Scale root _), i), (next, _)) = 
+    ScaleRow { scale = this
+             , notes = reverse . foldl scaleRowNotes [] $ ns 
+             , styleIndex = i
+             }
     where
       scaleRowNotes :: [ScaleRowNote] -> Note -> [ScaleRowNote]
       scaleRowNotes [] n = [scaleRowNote n (n == root)]
@@ -58,7 +62,7 @@ scaleRows ns scs = scaleRows' (last scs:scs) (length scs) where
       scaleRowNote :: Note -> Bool -> ScaleRowNote
       scaleRowNote n m =
         let sh = (inScale prev n, inScale this n, inScale next n)
-        in ScaleRowNote { note = n, marked = m, sharing' = sh }
+        in ScaleRowNote { note = n, marked = m, sharing = sh }
     
 data ProgressionStep = Step { scales :: [Scale]
                             , chords :: [Chord]
@@ -85,7 +89,7 @@ buildKeys :: ScaleRow -> [Key]
 buildKeys row = 
   map buildKey (notes row) where
     buildKey :: ScaleRowNote -> Key
-    buildKey (ScaleRowNote {note = n, sharing' = sh}) = Key { keyNote = n, pressed = False, sharing = sh }
+    buildKey (ScaleRowNote {note = n}) = Key { keyNote = n, pressed = False }
 
 moveStep :: Int -> State -> State
 moveStep delta state@State{progression = p, rows = rs, currentRow = i} =

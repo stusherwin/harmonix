@@ -85,41 +85,39 @@ renderKeyShape BlkKey n p c = out $ Jmp p
                                     : Mv 1 (-2) : P c n 
                                     : []
 
-renderKeys :: Pos -> [Key] -> IO ()
-renderKeys (x0, y0) ks = do
+renderKeys :: Pos -> State -> IO ()
+renderKeys (x0, y0) state = do
   sequence_ $ getZipList $ renderKey <$> ZipList ks
-                                   <*> ZipList [(x0 + i, y0) | i <- [0, 3 ..]]
-                                   <*> ZipList (True : repeat False)
+                                     <*> ZipList [(x0 + i, y0) | i <- [0, 3 ..]]
+                                     <*> ZipList (True : repeat False)
   setColor (Col Vivid White) (Col Dull Black)
-  setCursorPosition (y0 + 7) x0 where
-    renderKey :: Key -> Pos -> Bool -> IO ()
-    renderKey Key{keyNote = C, sharing = sh} p isFirst = do
-      let c = col WhiteKey sh 
+  setCursorPosition (y0 + 7) x0
+  where
+    cr = rows state !! currentRow state
+    ks = zip (keys state) (notes cr)
+    i = styleIndex cr
+    renderKey :: (Key, ScaleRowNote) -> Pos -> Bool -> IO ()
+    renderKey (Key{keyNote = C}, ScaleRowNote {sharing = sh}) p isFirst = do
+      let c = col WhiteKey sh
       renderKeyShape CFKey "C" p c >> renderMarker WhiteKey sh
       when isFirst (out $ Jmp p : (take 7 $ repeat $ Pn c " "))
-    renderKey Key{keyNote = Cs, sharing = sh} p _ = renderKeyShape BlkKey "C#" p (col BlackKey sh) >> renderMarker BlackKey sh
-    renderKey Key{keyNote = D,  sharing = sh} p _ = renderKeyShape DAKey  "D"  p (col WhiteKey sh) >> renderMarker WhiteKey sh
-    renderKey Key{keyNote = Eb, sharing = sh} p _ = renderKeyShape BlkKey "Eb" p (col BlackKey sh) >> renderMarker BlackKey sh
-    renderKey Key{keyNote = E,  sharing = sh} p _ = renderKeyShape EBKey  "E"  p (col WhiteKey sh) >> renderMarker WhiteKey sh
-    renderKey Key{keyNote = F,  sharing = sh} p _ = renderKeyShape CFKey  "F"  p (col WhiteKey sh) >> renderMarker WhiteKey sh
-    renderKey Key{keyNote = Fs, sharing = sh} p _ = renderKeyShape BlkKey "F#" p (col BlackKey sh) >> renderMarker BlackKey sh
-    renderKey Key{keyNote = G,  sharing = sh} p _ = renderKeyShape GKey   "G"  p (col WhiteKey sh) >> renderMarker WhiteKey sh
-    renderKey Key{keyNote = Ab, sharing = sh} p _ = renderKeyShape BlkKey "Ab" p (col BlackKey sh) >> renderMarker BlackKey sh
-    renderKey Key{keyNote = A,  sharing = sh} p _ = renderKeyShape DAKey  "A"  p (col WhiteKey sh) >> renderMarker WhiteKey sh
-    renderKey Key{keyNote = Bb, sharing = sh} p _ = renderKeyShape BlkKey "Bb" p (col BlackKey sh) >> renderMarker BlackKey sh
-    renderKey Key{keyNote = B,  sharing = sh} p _ = renderKeyShape EBKey  "B"  p (col WhiteKey sh) >> renderMarker WhiteKey sh
+    renderKey (Key{keyNote = Cs}, ScaleRowNote {sharing = sh}) p _ = renderKeyShape BlkKey "C#" p (col BlackKey sh) >> renderMarker BlackKey sh
+    renderKey (Key{keyNote = D},  ScaleRowNote {sharing = sh}) p _ = renderKeyShape DAKey  "D"  p (col WhiteKey sh) >> renderMarker WhiteKey sh
+    renderKey (Key{keyNote = Eb}, ScaleRowNote {sharing = sh}) p _ = renderKeyShape BlkKey "Eb" p (col BlackKey sh) >> renderMarker BlackKey sh
+    renderKey (Key{keyNote = E},  ScaleRowNote {sharing = sh}) p _ = renderKeyShape EBKey  "E"  p (col WhiteKey sh) >> renderMarker WhiteKey sh
+    renderKey (Key{keyNote = F},  ScaleRowNote {sharing = sh}) p _ = renderKeyShape CFKey  "F"  p (col WhiteKey sh) >> renderMarker WhiteKey sh
+    renderKey (Key{keyNote = Fs}, ScaleRowNote {sharing = sh}) p _ = renderKeyShape BlkKey "F#" p (col BlackKey sh) >> renderMarker BlackKey sh
+    renderKey (Key{keyNote = G},  ScaleRowNote {sharing = sh}) p _ = renderKeyShape GKey   "G"  p (col WhiteKey sh) >> renderMarker WhiteKey sh
+    renderKey (Key{keyNote = Ab}, ScaleRowNote {sharing = sh}) p _ = renderKeyShape BlkKey "Ab" p (col BlackKey sh) >> renderMarker BlackKey sh
+    renderKey (Key{keyNote = A},  ScaleRowNote {sharing = sh}) p _ = renderKeyShape DAKey  "A"  p (col WhiteKey sh) >> renderMarker WhiteKey sh
+    renderKey (Key{keyNote = Bb}, ScaleRowNote {sharing = sh}) p _ = renderKeyShape BlkKey "Bb" p (col BlackKey sh) >> renderMarker BlackKey sh
+    renderKey (Key{keyNote = B},  ScaleRowNote {sharing = sh}) p _ = renderKeyShape EBKey  "B"  p (col WhiteKey sh) >> renderMarker WhiteKey sh
     
     col :: KeyType -> (Bool, Bool, Bool) -> (Col, Col)
-    col WhiteKey (True, True, False)  = (Col Dull Black,  Col Vivid Green)
-    col WhiteKey (False, True, False) = (Col Dull Black,  Col Vivid Cyan)
-    col WhiteKey (False, True, True)  = (Col Dull Black,  Col Vivid Red)
-    col WhiteKey (True, True, True)   = (Col Dull Black,  Col Vivid Yellow)
-    col WhiteKey _                    = (Col Dull Black,  Col Vivid White)
-    col BlackKey (True, True, False)  = (Col Vivid White, Col Dull Green)
-    col BlackKey (False, True, False) = (Col Vivid White, Col Dull Cyan)
-    col BlackKey (False, True, True)  = (Col Vivid White, Col Dull Red)
-    col BlackKey (True, True, True)   = (Col Vivid White, Col Dull Yellow)
-    col BlackKey _                    = (Col Vivid White, Col Dull Black)
+    col WhiteKey (_, True, _) = (Col Dull Black, styleIndexColor Vivid i)
+    col WhiteKey _ = (Col Dull Black, Col Vivid White)
+    col BlackKey (_, True, _) = (Col Vivid White, styleIndexColor Dull i)
+    col BlackKey _ = (Col Vivid White, Col Dull Black)
 
     renderMarker :: KeyType -> (Bool, Bool, Bool) -> IO ()
     renderMarker WhiteKey (True, True, False) = cursorBackward 1 >> cursorUp 1   >> putStr downArrow
@@ -136,9 +134,16 @@ getRole curr len i | i == curr = This
                    | i == (curr + 1 + len) `mod` len = Next
                    | otherwise = None
 
+styleIndexColor :: ColorIntensity -> Int -> Col
+styleIndexColor int 0 = Col int Green
+styleIndexColor int 1 = Col int Red
+styleIndexColor int 2 = Col int Cyan
+styleIndexColor int 3 = Col int Yellow
+styleIndexColor _ _   = Col Dull Black
+
 renderNotes :: Pos -> State -> IO ()
 renderNotes pos state = do
-  renderNotes' pos True (zip3 prevs rs $ map (getRole (currentRow state) $ length $ rs) [0..])
+  renderNotes' pos True $ zip3 prevs rs $ map (getRole (currentRow state) $ length $ rs) [0..]
   where
     rs = rows state
     prevs = last rs : rs
@@ -154,29 +159,29 @@ renderNotes pos state = do
       sequence_ $ map (renderNote isFirstRow prev this role) $ (notes prev `zip` notes this)
   
     renderNote :: Bool -> ScaleRow -> ScaleRow -> Role -> (ScaleRowNote, ScaleRowNote) -> IO ()
-    renderNote isFirstRow prev this role (ScaleRowNote {marked = prevMarked}, ScaleRowNote {note = n, marked = m, sharing' = sh@(_, inThis, _)}) = do
-      setNoteColor role sh
+    renderNote isFirstRow prev this role (ScaleRowNote {marked = prevMarked}, ScaleRowNote {note = n, marked = m, sharing = sh@(_, inThis, _)}) = do
+      setNoteColor role sh m (styleIndex this)
       putStr (pad 3 $ if inThis then show $ n else "")
-      setColor (Col Vivid Black) (Col Dull Black)
+      setColor (Col Dull White) (Col Dull Black)
       when (isRoot (scale this) n) $ do
         cursorBackward 4
         putStr "│"
         cursorForward 3
       let top = case (isFirstRow, prevMarked, isRoot (scale prev) n, m, isRoot (scale this) n) of
-                      (False, True, True, True, True) -> "├"
-                      (False, False, False, True, True) -> "┌"
-                      (False, True, False, True, True) -> "┬"
-                      (False, True, True, True, False) -> "┴"
-                      (False, False, False, False, True) -> "┐"
-                      (False, False, True, False, True) -> "┤"
-                      (False, True, False, False, True) -> "┬"
-                      (False, False, True, False, False) -> "┘"
-                      (False, True, True, False, False) -> "└"
-                      (False, False, True, True, False) -> "┴"
+                      (False, True, True, True, True)     -> "├"
+                      (False, False, False, True, True)   -> "┌"
+                      (False, True, False, True, True)    -> "┬"
+                      (False, True, True, True, False)    -> "┴"
+                      (False, False, False, False, True)  -> "┐"
+                      (False, False, True, False, True)   -> "┤"
+                      (False, True, False, False, True)   -> "┬"
+                      (False, False, True, False, False)  -> "┘"
+                      (False, True, True, False, False)   -> "└"
+                      (False, False, True, True, False)   -> "┴"
                       (False, False, False, False, False) -> " "
-                      (False, True, False, True, False) -> "─"
-                      (False, True, False, False, False) -> "─"
-                      (False, False, False, True, False) -> "─"
+                      (False, True, False, True, False)   -> "─"
+                      (False, True, False, False, False)  -> "─"
+                      (False, False, False, True, False)  -> "─"
                       (True, _, _, True, True)  -> "┌"
                       (True, _, _, False, True) -> "┐"
                       (True, _, _, True, False) -> "─"
@@ -191,23 +196,17 @@ renderNotes pos state = do
       when m $ cursorBackward 3 >> cursorUp 1 >> putStr "──" >> cursorBackward 2 >> cursorDown 2 >> putStr "──" >> cursorUp 1 >> cursorForward 1
       setColor defaultFg defaultBg
   
-    setNoteColor :: Role -> (Bool, Bool, Bool) -> IO ()
-    setNoteColor role (inPrev, inThis, inNext) =
+    setNoteColor :: Role -> (Bool, Bool, Bool) -> Bool -> Int -> IO ()
+    setNoteColor role (inPrev, inThis, inNext) marked i =
       let bg = Col Dull Black
-          fg = case (inPrev, inThis, inNext, role) of
-                    (_, True, _, Prev)         -> Col Vivid Green
-                    (_, True, _, Next)         -> Col Vivid Red
-                    (False, True, False, This) -> Col Vivid Cyan
-                    (True, True, False, This)  -> Col Vivid Green
-                    (False, True, True, This)  -> Col Vivid Red
-                    (True, True, True, This)   -> Col Vivid Yellow
-                    (_, _, _, None)            -> Col Vivid White
-                    _ -> bg
+          fgIn = if marked then Vivid else Dull
+          fg = if inThis then styleIndexColor fgIn i else bg
       in  setColor fg bg
+
 
 renderArrows :: Pos -> State -> IO ()
 renderArrows pos state = do
-  renderArrows' pos (zip (rows state) $ map (getRole (currentRow state) $ length $ rows state) [0..])
+  renderArrows' pos $ zip (rows state) $ map (getRole (currentRow state) $ length $ rows state) [0..]
   where
     renderArrows' :: Pos -> [(ScaleRow, Role)] -> IO ()
     renderArrows' _ [] = return ()
@@ -218,13 +217,14 @@ renderArrows pos state = do
     renderArrowRow :: Pos -> ScaleRow -> Role -> IO ()
     renderArrowRow (x, y) row role = do
       setCursorPosition (y + 1) x
-      sequence_ $ map (renderArrow role) $ notes row
+      sequence_ $ map (renderArrow role (styleIndex row)) $ notes row
       
-    renderArrow :: Role -> ScaleRowNote -> IO ()
-    renderArrow role (ScaleRowNote {sharing' = (_, inThis, inNext)}) = do
-      setColor (case role of Prev -> (Col Vivid Green)
-                             This -> (Col Vivid Red)
-                             _ -> (Col Vivid White)) (Col Dull Black)
+    renderArrow :: Role -> Int -> ScaleRowNote -> IO ()
+    renderArrow role i (ScaleRowNote {sharing = (_, inThis, inNext), marked = m}) = do
+      let bg = Col Dull Black
+          fgIn = if m then Vivid else Dull
+          fg = styleIndexColor fgIn i
+      setColor fg bg
       if (inThis && inNext)
         then putStr downArrow >> cursorForward 2
         else cursorForward 3
@@ -273,5 +273,5 @@ clearLines n = clearLine >> cursorDown 1 >> clearLines (n - 1)
 
 render :: State -> IO ()
 render state = do
-  renderKeys (1, 1) $ keys state
+  renderKeys (1, 1) state
   renderRows (2, 9) state
