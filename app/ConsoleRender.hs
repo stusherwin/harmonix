@@ -9,7 +9,7 @@ import System.Console.ANSI
 
 import Music (Note (..), isRoot)
 import Console (Command (..), Pos, Col (..), out, setColor)
-import App (State (..), Key (..), ProgressionStep (..), Role (..), ScaleRow (..), ScaleRowNote (..), EditField (..))
+import App (State (..), Key (..), ProgressionStep (..), ScaleRow (..), ScaleRowNote (..), EditField (..), SharedNoteDisplay (..))
 import Util (pad)
  
 -- [ "│  │░░░░││░░░░│ │ │░░░░││░░░░││░░░│ │  │░░░░││░░░░│ │ │░░░░││░░░░││░░░│ │"
@@ -96,6 +96,7 @@ renderKeys (x0, y0) state = do
     cr = rows state !! currentRow state
     ks = zip (keys state) (notes cr)
     ix = styleIndex cr
+    disp = sharedNoteDisplay state
     renderKey :: (Key, ScaleRowNote) -> Pos -> Bool -> IO ()
     renderKey (Key{keyNote = C}, ScaleRowNote {sharing = sh}) p isFirst = do
       let c = col WhiteKey sh
@@ -114,10 +115,8 @@ renderKeys (x0, y0) state = do
     renderKey (Key{keyNote = B},  ScaleRowNote {sharing = sh}) p _ = renderKeyShape EBKey  "B"  p (col WhiteKey sh) >> renderMarker WhiteKey sh
     
     col :: KeyType -> (Bool, Bool, Bool) -> (Col, Col)
-    col WhiteKey (_, True, _) = (Col Dull Black, styleIndexColor Vivid ix)
-    col WhiteKey _ = (Col Dull Black, Col Vivid White)
-    col BlackKey (_, True, _) = (Col Vivid White, styleIndexColor Dull ix)
-    col BlackKey _ = (Col Vivid White, Col Dull Black)
+    col WhiteKey sh = (Col Dull Black,  noteColor disp ix sh Vivid (Col Vivid White))
+    col BlackKey sh = (Col Vivid White, noteColor disp ix sh Dull (Col Dull Black))
 
     renderMarker :: KeyType -> (Bool, Bool, Bool) -> IO ()
     renderMarker WhiteKey (True, True, False) = cursorBackward 1 >> cursorUp 1   >> putStr downArrow
@@ -128,39 +127,54 @@ renderKeys (x0, y0) state = do
     renderMarker BlackKey (True, True, True)  = cursorBackward 2 >> cursorUp 1   >> putStr downArrow >> cursorDown 2 >> cursorBackward 1 >> putStr downArrow
     renderMarker _ _                   = return ()
 
-getRole :: Int -> Int -> Int -> Role
-getRole curr len i | i == curr = This
-                   | i == (curr - 1 + len) `mod` len = Prev
-                   | i == (curr + 1 + len) `mod` len = Next
-                   | otherwise = None
+-- getRole :: Int -> Int -> Int -> Role
+-- getRole curr len i | i == curr = This
+--                    | i == (curr - 1 + len) `mod` len = Prev
+--                    | i == (curr + 1 + len) `mod` len = Next
+--                    | otherwise = None
 
 styleIndexColor :: ColorIntensity -> Int -> Col
 styleIndexColor int 0 = Col int Green
-styleIndexColor int 1 = Col int Red
-styleIndexColor int 2 = Col int Cyan
+styleIndexColor int 1 = Col int Cyan
+styleIndexColor int 2 = Col int Red
 styleIndexColor int 3 = Col int Yellow
 styleIndexColor _ _   = Col Dull Black
 
+noteColor :: SharedNoteDisplay -> Int -> (Bool, Bool, Bool) -> ColorIntensity -> Col -> Col
+noteColor ThisOnly     ix (_,    True, _)    int _ = styleIndexColor int ix
+noteColor Prev         ix (True, True, _)    int _ = styleIndexColor int $ (ix - 1) `mod` 4
+noteColor Prev         ix (_,    True, _)    int _ = styleIndexColor int ix
+noteColor Next         ix (_,    True, True) int _ = styleIndexColor int $ (ix + 1) `mod` 4
+noteColor Next         ix (_,    True, _)    int _ = styleIndexColor int ix
+noteColor PrevOverNext ix (True, True, True) int _ = styleIndexColor int $ (ix - 1) `mod` 4
+noteColor PrevOverNext ix (_,    True, True) int _ = styleIndexColor int $ (ix + 1) `mod` 4
+noteColor PrevOverNext ix (_,    True, _)    int _ = styleIndexColor int ix
+noteColor NextOverPrev ix (True, True, True) int _ = styleIndexColor int $ (ix + 1) `mod` 4
+noteColor NextOverPrev ix (True, True, _)    int _ = styleIndexColor int $ (ix - 1) `mod` 4
+noteColor NextOverPrev ix (_,    True, _)    int _ = styleIndexColor int ix
+noteColor _ _ _ _ def = def
+
 renderNotes :: Pos -> State -> IO ()
 renderNotes pos state = do
-  renderNotes' pos True $ zip3 prevs rs $ map (getRole (currentRow state) $ length $ rs) [0..]
+  renderNotes' pos True $ zip prevs rs
   where
     rs = rows state
     prevs = last rs : rs
-    renderNotes' :: Pos -> Bool -> [(ScaleRow, ScaleRow, Role)] -> IO ()
+    disp = sharedNoteDisplay state
+    renderNotes' :: Pos -> Bool -> [(ScaleRow, ScaleRow)] -> IO ()
     renderNotes' _ _ [] = return ()
-    renderNotes' (x, y) isFirstRow ((prev, this, role):rest) = do
-      renderNoteRow (x, y) isFirstRow prev this role
+    renderNotes' (x, y) isFirstRow ((prev, this):rest) = do
+      renderNoteRow (x, y) isFirstRow prev this
       renderNotes' (x, y + 2) False rest
 
-    renderNoteRow :: Pos -> Bool -> ScaleRow -> ScaleRow -> Role -> IO ()
-    renderNoteRow (x, y) isFirstRow prev this role = do
+    renderNoteRow :: Pos -> Bool -> ScaleRow -> ScaleRow -> IO ()
+    renderNoteRow (x, y) isFirstRow prev this = do
       setCursorPosition y x
-      sequence_ $ map (renderNote isFirstRow prev this role) $ (notes prev `zip` notes this)
+      sequence_ $ map (renderNote isFirstRow prev this) $ (notes prev `zip` notes this)
   
-    renderNote :: Bool -> ScaleRow -> ScaleRow -> Role -> (ScaleRowNote, ScaleRowNote) -> IO ()
-    renderNote isFirstRow prev this role (ScaleRowNote {marked = prevMarked}, ScaleRowNote {note = n, marked = m, sharing = sh@(_, inThis, _)}) = do
-      setNoteColor role sh m (styleIndex this)
+    renderNote :: Bool -> ScaleRow -> ScaleRow -> (ScaleRowNote, ScaleRowNote) -> IO ()
+    renderNote isFirstRow prev this (ScaleRowNote {marked = prevMarked}, ScaleRowNote {note = n, marked = m, sharing = sh@(_, inThis, _)}) = do
+      setNoteColor sh m (styleIndex this)
       putStr (pad 3 $ if inThis then show $ n else "")
       setColor (Col Dull White) (Col Dull Black)
       when (isRoot (scale this) n) $ do
@@ -196,31 +210,30 @@ renderNotes pos state = do
       when m $ cursorBackward 3 >> cursorUp 1 >> putStr "──" >> cursorBackward 2 >> cursorDown 2 >> putStr "──" >> cursorUp 1 >> cursorForward 1
       setColor defaultFg defaultBg
   
-    setNoteColor :: Role -> (Bool, Bool, Bool) -> Bool -> Int -> IO ()
-    setNoteColor role (inPrev, inThis, inNext) marked i =
-      let bg = Col Dull Black
+    setNoteColor :: (Bool, Bool, Bool) -> Bool -> Int -> IO ()
+    setNoteColor sh marked i =
+      let bg   = Col Dull Black
           fgIn = if marked then Vivid else Dull
-          fg = if inThis then styleIndexColor fgIn i else bg
+          fg   = noteColor disp i sh fgIn bg
       in  setColor fg bg
-
 
 renderArrows :: Pos -> State -> IO ()
 renderArrows pos state = do
-  renderArrows' pos $ zip (rows state) $ map (getRole (currentRow state) $ length $ rows state) [0..]
+  renderArrows' pos $ rows state
   where
-    renderArrows' :: Pos -> [(ScaleRow, Role)] -> IO ()
+    renderArrows' :: Pos -> [ScaleRow] -> IO ()
     renderArrows' _ [] = return ()
-    renderArrows' (x, y) ((r, role):rs) = do
-      renderArrowRow (x, y) r role
+    renderArrows' (x, y) (r:rs) = do
+      renderArrowRow (x, y) r
       renderArrows' (x, y + 2) rs
 
-    renderArrowRow :: Pos -> ScaleRow -> Role -> IO ()
-    renderArrowRow (x, y) row role = do
+    renderArrowRow :: Pos -> ScaleRow -> IO ()
+    renderArrowRow (x, y) row = do
       setCursorPosition (y + 1) x
-      sequence_ $ map (renderArrow role (styleIndex row)) $ notes row
+      sequence_ $ map (renderArrow (styleIndex row)) $ notes row
       
-    renderArrow :: Role -> Int -> ScaleRowNote -> IO ()
-    renderArrow role i (ScaleRowNote {sharing = (_, inThis, inNext), marked = m}) = do
+    renderArrow :: Int -> ScaleRowNote -> IO ()
+    renderArrow i (ScaleRowNote {sharing = (_, inThis, inNext), marked = m}) = do
       let bg = Col Dull Black
           fgIn = if m then Vivid else Dull
           fg = styleIndexColor fgIn i

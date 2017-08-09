@@ -7,6 +7,7 @@ module App
   , ScaleRow (..)
   , ScaleRowNote (..)
   , EditField (..)
+  , SharedNoteDisplay (..)
   , progressionStep
   , handleCommand
   , key
@@ -19,7 +20,7 @@ import Data.List (nub)
 import Music (Note (..), Chord (..), Scale (..), inScale, scalesForChord, chordsForScale)
 import Util (rotate, update)
 
-data Role = Prev | This | Next | None deriving Eq
+data Role = XXX deriving Eq -- Prev | This | Next | None deriving Eq
 
 data Key = Key { keyNote :: Note
                , pressed :: Bool
@@ -75,15 +76,18 @@ progressionStep c = Step { scales = scalesForChord c
 
 data EditField = EditScale | EditChord deriving Eq
 
+data SharedNoteDisplay = ThisOnly | Prev | Next | PrevOverNext | NextOverPrev deriving Eq
+
 data State = State { quitting :: Bool
                    , progression :: [ProgressionStep]
                    , keys :: [Key]
                    , rows :: [ScaleRow]
                    , currentRow :: Int
                    , editField :: EditField
+                   , sharedNoteDisplay :: SharedNoteDisplay
                    } deriving Eq
 
-data Command = MoveStep Int | RotateStep Int | ToggleScaleChord | Quit
+data Command = MoveStep Int | RotateStep Int | ToggleScaleChord | CycleSharedNoteDisplay | Quit
 
 buildKeys :: ScaleRow -> [Key]
 buildKeys row = 
@@ -116,6 +120,13 @@ toggleScaleChord state@State{editField = ef} =
                        _ -> EditScale
   in state{editField = ef'}
 
+cycleSharedNoteDisplay :: State -> State
+cycleSharedNoteDisplay s@State{sharedNoteDisplay = ThisOnly}     = s{sharedNoteDisplay = Prev}
+cycleSharedNoteDisplay s@State{sharedNoteDisplay = Prev}         = s{sharedNoteDisplay = Next}
+cycleSharedNoteDisplay s@State{sharedNoteDisplay = Next}         = s{sharedNoteDisplay = PrevOverNext}
+cycleSharedNoteDisplay s@State{sharedNoteDisplay = PrevOverNext} = s{sharedNoteDisplay = NextOverPrev}
+cycleSharedNoteDisplay s@State{sharedNoteDisplay = NextOverPrev} = s{sharedNoteDisplay = ThisOnly}
+
 quit :: State -> State
 quit state = state{quitting = True}
 
@@ -123,4 +134,5 @@ handleCommand :: Command -> State -> State
 handleCommand (MoveStep delta) = moveStep delta
 handleCommand (RotateStep delta) = rotateStep delta
 handleCommand ToggleScaleChord = toggleScaleChord
+handleCommand CycleSharedNoteDisplay = cycleSharedNoteDisplay
 handleCommand Quit = quit

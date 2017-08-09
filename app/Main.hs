@@ -9,7 +9,7 @@ import System.IO (hSetEcho, stdin, hSetBuffering, stdout, BufferMode (..))
 
 import Music (Note (..), Chord (..), ChordType (..), notes)
 import ConsoleRender (render)
-import App (State (..), Command (..), ProgressionStep (..), EditField (..), progressionStep, handleCommand, key, scaleRows)
+import App (State (..), Command (..), ProgressionStep (..), EditField (..), SharedNoteDisplay (..), progressionStep, handleCommand, key, scaleRows)
 
 getHiddenChar = fmap (chr.fromEnum) c_getch
 foreign import ccall unsafe "conio.h getch"
@@ -22,6 +22,7 @@ initState = State { quitting = False
                   , currentRow = 0
                   , editField = EditScale
                   , keys = zipWith key ns pressed
+                  , sharedNoteDisplay = Prev
                   } where ns = take 24 $ cycle notes
                           steps = [ progressionStep (Chord E Min7b5)
                                   , progressionStep (Chord A Dom7)
@@ -52,6 +53,7 @@ main = do
                       'k' ->  Just $ RotateStep (-1)
                       ';' ->  Just $ RotateStep 1
                       '\t' -> Just $ ToggleScaleChord
+                      ' ' ->  Just $ CycleSharedNoteDisplay
                       'q' ->  Just $ Quit
                       _   ->  Nothing
         let state' = maybe state (\com -> handleCommand com state) command
