@@ -31,58 +31,59 @@ downArrow = [chr 0x19]
 -- upArrow = [chr 0x18]
 
 data KeyShape = CFKey | DAKey | EBKey | GKey | BlkKey
+data KeyType = WhiteKey | BlackKey
 
-drawKeyShape :: KeyShape -> String -> Pos -> Col -> Col -> IO ()
-drawKeyShape CFKey n p fg bg = out $ Jmp p
-                                    : Pn fg bg "│  "
-                                    : Pn fg bg "│  "
-                                    : Pn fg bg "│  "
-                                    : Pn fg bg "│  "
-                                    : Pn fg bg "│    "
-                                    : Pn fg bg "│    "
-                                    : Pn fg bg "│    "
-                                    : Mv 1 (-2) : P fg bg n
+drawKeyShape :: KeyShape -> String -> Pos -> (Col, Col) -> IO ()
+drawKeyShape CFKey n p c = out $ Jmp p
+                                    : Pn c "│  "
+                                    : Pn c "│  "
+                                    : Pn c "│  "
+                                    : Pn c "│  "
+                                    : Pn c "│    "
+                                    : Pn c "│    "
+                                    : Pn c "│    "
+                                    : Mv 1 (-2) : P c n
                                     : []
 
-drawKeyShape DAKey n p fg bg = out $ Jmp p : Mv 1 0
-                                    : Pn fg bg   "  "
-                                    : Pn fg bg   "  "
-                                    : Pn fg bg   "  "
-                                    : Pn fg bg   "  " : Mv (-2) 0
-                                    : Pn fg bg "│    "
-                                    : Pn fg bg "│ D  "
-                                    : Pn fg bg "│    "
-                                    : Mv 2 (-2) : P fg bg n
+drawKeyShape DAKey n p c = out $ Jmp p : Mv 1 0
+                                    : Pn c   "  "
+                                    : Pn c   "  "
+                                    : Pn c   "  "
+                                    : Pn c   "  " : Mv (-2) 0
+                                    : Pn c "│    "
+                                    : Pn c "│ D  "
+                                    : Pn c "│    "
+                                    : Mv 2 (-2) : P c n
                                     : []
 
-drawKeyShape EBKey n p fg bg = out $ Jmp p : Mv 1 0
-                                    : Pn fg bg    "  "
-                                    : Pn fg bg    "  "
-                                    : Pn fg bg    "  "
-                                    : Pn fg bg    "  " : Mv (-3) 0
-                                    : Pn fg bg "│    "
-                                    : Pn fg bg "│    "
-                                    : Pn fg bg "│    "
-                                    : Mv 3 (-2) : P fg bg n
+drawKeyShape EBKey n p c = out $ Jmp p : Mv 1 0
+                                    : Pn c    "  "
+                                    : Pn c    "  "
+                                    : Pn c    "  "
+                                    : Pn c    "  " : Mv (-3) 0
+                                    : Pn c "│    "
+                                    : Pn c "│    "
+                                    : Pn c "│    "
+                                    : Mv 3 (-2) : P c n
                                     : []
 
-drawKeyShape GKey n p fg bg = out $ Jmp p : Mv 1 0
-                                  : Pn fg bg   "  "
-                                  : Pn fg bg   "  "
-                                  : Pn fg bg   "  "
-                                  : Pn fg bg   "  " : Mv (-2) 0
-                                  : Pn fg bg "│     "
-                                  : Pn fg bg "│     "
-                                  : Pn fg bg "│     "
-                                  : Mv 2 (-2) : P fg bg n
+drawKeyShape GKey n p c = out $ Jmp p : Mv 1 0
+                                  : Pn c   "  "
+                                  : Pn c   "  "
+                                  : Pn c   "  "
+                                  : Pn c   "  " : Mv (-2) 0
+                                  : Pn c "│     "
+                                  : Pn c "│     "
+                                  : Pn c "│     "
+                                  : Mv 2 (-2) : P c n
                                   : []
 
-drawKeyShape BlkKey n p fg bg = out $ Jmp p
-                                    : Pn fg bg "    "
-                                    : Pn fg bg "    "
-                                    : Pn fg bg " Eb "
-                                    : Pn fg bg "    "
-                                    : Mv 1 (-2) : P fg bg n 
+drawKeyShape BlkKey n p c = out $ Jmp p
+                                    : Pn c "    "
+                                    : Pn c "    "
+                                    : Pn c " Eb "
+                                    : Pn c "    "
+                                    : Mv 1 (-2) : P c n 
                                     : []
 
 drawKeys :: Pos -> [Key] -> IO ()
@@ -92,51 +93,44 @@ drawKeys (x0, y0) ks = do
                                    <*> ZipList (True : repeat False)
   setColor (Col Vivid White) (Col Dull Black)
   setCursorPosition (y0 + 7) x0 where
-    wh = (Col Vivid White)
-    bl = (Col Dull Black)
-
     drawKey :: Key -> Pos -> Bool -> IO ()
     drawKey Key{keyNote = C, sharing = sh} p isFirst = do
-      let bg = getWhiteKeyBg sh 
-      drawKeyShape CFKey "C" p bl bg >> drawWhiteKeyMarker sh
-      when isFirst (out $ Jmp p : (take 7 $ repeat $ Pn bl bg " "))
-    drawKey Key{keyNote = Cs, sharing = sh} p _ = (drawKeyShape BlkKey "C#" p wh $ getBlackKeyBg sh) >> drawBlackKeyMarker sh
-    drawKey Key{keyNote = D,  sharing = sh} p _ = (drawKeyShape DAKey  "D"  p bl $ getWhiteKeyBg sh) >> drawWhiteKeyMarker sh
-    drawKey Key{keyNote = Eb, sharing = sh} p _ = (drawKeyShape BlkKey "Eb" p wh $ getBlackKeyBg sh) >> drawBlackKeyMarker sh
-    drawKey Key{keyNote = E,  sharing = sh} p _ = (drawKeyShape EBKey  "E"  p bl $ getWhiteKeyBg sh) >> drawWhiteKeyMarker sh
-    drawKey Key{keyNote = F,  sharing = sh} p _ = (drawKeyShape CFKey  "F"  p bl $ getWhiteKeyBg sh) >> drawWhiteKeyMarker sh
-    drawKey Key{keyNote = Fs, sharing = sh} p _ = (drawKeyShape BlkKey "F#" p wh $ getBlackKeyBg sh) >> drawBlackKeyMarker sh
-    drawKey Key{keyNote = G,  sharing = sh} p _ = (drawKeyShape GKey   "G"  p bl $ getWhiteKeyBg sh) >> drawWhiteKeyMarker sh
-    drawKey Key{keyNote = Ab, sharing = sh} p _ = (drawKeyShape BlkKey "Ab" p wh $ getBlackKeyBg sh) >> drawBlackKeyMarker sh
-    drawKey Key{keyNote = A,  sharing = sh} p _ = (drawKeyShape DAKey  "A"  p bl $ getWhiteKeyBg sh) >> drawWhiteKeyMarker sh
-    drawKey Key{keyNote = Bb, sharing = sh} p _ = (drawKeyShape BlkKey "Bb" p wh $ getBlackKeyBg sh) >> drawBlackKeyMarker sh
-    drawKey Key{keyNote = B,  sharing = sh} p _ = (drawKeyShape EBKey  "B"  p bl $ getWhiteKeyBg sh) >> drawWhiteKeyMarker sh
+      let c = col WhiteKey sh 
+      drawKeyShape CFKey "C" p c >> drawMarker WhiteKey sh
+      when isFirst (out $ Jmp p : (take 7 $ repeat $ Pn c " "))
+    drawKey Key{keyNote = Cs, sharing = sh} p _ = drawKeyShape BlkKey "C#" p (col BlackKey sh) >> drawMarker BlackKey sh
+    drawKey Key{keyNote = D,  sharing = sh} p _ = drawKeyShape DAKey  "D"  p (col WhiteKey sh) >> drawMarker WhiteKey sh
+    drawKey Key{keyNote = Eb, sharing = sh} p _ = drawKeyShape BlkKey "Eb" p (col BlackKey sh) >> drawMarker BlackKey sh
+    drawKey Key{keyNote = E,  sharing = sh} p _ = drawKeyShape EBKey  "E"  p (col WhiteKey sh) >> drawMarker WhiteKey sh
+    drawKey Key{keyNote = F,  sharing = sh} p _ = drawKeyShape CFKey  "F"  p (col WhiteKey sh) >> drawMarker WhiteKey sh
+    drawKey Key{keyNote = Fs, sharing = sh} p _ = drawKeyShape BlkKey "F#" p (col BlackKey sh) >> drawMarker BlackKey sh
+    drawKey Key{keyNote = G,  sharing = sh} p _ = drawKeyShape GKey   "G"  p (col WhiteKey sh) >> drawMarker WhiteKey sh
+    drawKey Key{keyNote = Ab, sharing = sh} p _ = drawKeyShape BlkKey "Ab" p (col BlackKey sh) >> drawMarker BlackKey sh
+    drawKey Key{keyNote = A,  sharing = sh} p _ = drawKeyShape DAKey  "A"  p (col WhiteKey sh) >> drawMarker WhiteKey sh
+    drawKey Key{keyNote = Bb, sharing = sh} p _ = drawKeyShape BlkKey "Bb" p (col BlackKey sh) >> drawMarker BlackKey sh
+    drawKey Key{keyNote = B,  sharing = sh} p _ = drawKeyShape EBKey  "B"  p (col WhiteKey sh) >> drawMarker WhiteKey sh
+    
+    col :: KeyType -> (Bool, Bool, Bool) -> (Col, Col)
+    col WhiteKey (True, True, False)  = (Col Dull Black,  Col Vivid Green)
+    col WhiteKey (False, True, False) = (Col Dull Black,  Col Vivid Cyan)
+    col WhiteKey (False, True, True)  = (Col Dull Black,  Col Vivid Red)
+    col WhiteKey (True, True, True)   = (Col Dull Black,  Col Vivid Yellow)
+    col WhiteKey _                    = (Col Dull Black,  Col Vivid White)
+    col BlackKey (True, True, False)  = (Col Vivid White, Col Dull Green)
+    col BlackKey (False, True, False) = (Col Vivid White, Col Dull Cyan)
+    col BlackKey (False, True, True)  = (Col Vivid White, Col Dull Red)
+    col BlackKey (True, True, True)   = (Col Vivid White, Col Dull Yellow)
+    col BlackKey _                    = (Col Vivid White, Col Dull Black)
 
-    getWhiteKeyBg :: (Bool, Bool, Bool) -> Col
-    getWhiteKeyBg (True, True, False)  = (Col Vivid Green)
-    getWhiteKeyBg (False, True, False) = (Col Vivid Cyan)
-    getWhiteKeyBg (False, True, True)  = (Col Vivid Red)
-    getWhiteKeyBg (True, True, True)   = (Col Vivid Yellow)
-    getWhiteKeyBg _                    = (Col Vivid White)
+    drawMarker :: KeyType -> (Bool, Bool, Bool) -> IO ()
+    drawMarker WhiteKey (True, True, False) = cursorBackward 1 >> cursorUp 1   >> putStr downArrow
+    drawMarker WhiteKey (False, True, True) = cursorBackward 1 >> cursorDown 1 >> putStr downArrow
+    drawMarker WhiteKey (True, True, True)  = cursorBackward 1 >> cursorUp 1   >> putStr downArrow >> cursorDown 2 >> cursorBackward 1 >> putStr downArrow
+    drawMarker BlackKey (True, True, False) = cursorBackward 2 >> cursorUp 1   >> putStr downArrow
+    drawMarker BlackKey (False, True, True) = cursorBackward 2 >> cursorDown 1 >> putStr downArrow
+    drawMarker BlackKey (True, True, True)  = cursorBackward 2 >> cursorUp 1   >> putStr downArrow >> cursorDown 2 >> cursorBackward 1 >> putStr downArrow
+    drawMarker _ _                   = return ()
 
-    getBlackKeyBg :: (Bool, Bool, Bool) -> Col
-    getBlackKeyBg (True, True, False)  = (Col Dull Green)
-    getBlackKeyBg (False, True, False) = (Col Dull Cyan)
-    getBlackKeyBg (False, True, True)  = (Col Dull Red)
-    getBlackKeyBg (True, True, True)   = (Col Dull Yellow)
-    getBlackKeyBg _                    = (Col Dull Black)
-
-    drawWhiteKeyMarker :: (Bool, Bool, Bool) -> IO ()
-    drawWhiteKeyMarker (True, True, False) = cursorBackward 1 >> cursorUp 1 >> putStr downArrow
-    drawWhiteKeyMarker (False, True, True) = cursorBackward 1 >> cursorDown 1 >> putStr downArrow
-    drawWhiteKeyMarker (True, True, True)  = cursorBackward 1 >> cursorUp 1 >> putStr downArrow >> cursorDown 2 >> cursorBackward 1 >> putStr downArrow
-    drawWhiteKeyMarker _                   = return ()
-      
-    drawBlackKeyMarker :: (Bool, Bool, Bool) -> IO ()
-    drawBlackKeyMarker (True, True, False) = cursorBackward 2 >> cursorUp 1 >> putStr downArrow
-    drawBlackKeyMarker (False, True, True) = cursorBackward 2 >> cursorDown 1 >> putStr downArrow
-    drawBlackKeyMarker (True, True, True)  = cursorBackward 2 >> cursorUp 1 >> putStr downArrow >> cursorDown 2 >> cursorBackward 1 >> putStr downArrow
-    drawBlackKeyMarker _                   = return ()
 getRole :: Int -> Int -> Int -> Role
 getRole curr len i | i == curr = This
                    | i == (curr - 1 + len) `mod` len = Prev
