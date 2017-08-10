@@ -22,7 +22,6 @@ initState = State { quitting = False
                   , currentRow = 0
                   , editField = EditScale
                   , keys = zipWith key ns pressed
-                  , sharedNoteDisplay = Prev
                   } where ns = take 24 $ cycle notes
                           steps = [ progressionStep (Chord E Min7b5)
                                   , progressionStep (Chord A Dom7)

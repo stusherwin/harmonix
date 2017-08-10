@@ -67,16 +67,18 @@ scaleRows ns scs = scaleRows' (zip (last scs:scs) (cycle [0..3])) (length scs) w
     
 data ProgressionStep = Step { scales :: [Scale]
                             , chords :: [Chord]
+                            , sharedNoteDisplay :: SharedNoteDisplay
                             } deriving (Eq, Show)
 
 progressionStep :: Chord -> ProgressionStep
 progressionStep c = Step { scales = scalesForChord c
                          , chords = nub $ c : (chordsForScale $ head $ scalesForChord c)
+                         , sharedNoteDisplay = ThisOnly
                          }
 
 data EditField = EditScale | EditChord deriving Eq
 
-data SharedNoteDisplay = ThisOnly | Prev | Next | PrevOverNext | NextOverPrev deriving Eq
+data SharedNoteDisplay = ThisOnly | Prev | Next | PrevOverNext | NextOverPrev deriving (Eq, Show)
 
 data State = State { quitting :: Bool
                    , progression :: [ProgressionStep]
@@ -84,7 +86,6 @@ data State = State { quitting :: Bool
                    , rows :: [ScaleRow]
                    , currentRow :: Int
                    , editField :: EditField
-                   , sharedNoteDisplay :: SharedNoteDisplay
                    } deriving Eq
 
 data Command = MoveStep Int | RotateStep Int | ToggleScaleChord | TogglePrev | ToggleNext | Quit
@@ -121,18 +122,26 @@ toggleScaleChord state@State{editField = ef} =
   in state{editField = ef'}
 
 togglePrev :: State -> State
-togglePrev s@State{sharedNoteDisplay = ThisOnly}      = s{sharedNoteDisplay = Prev}
-togglePrev s@State{sharedNoteDisplay = Prev}          = s{sharedNoteDisplay = ThisOnly}
-togglePrev s@State{sharedNoteDisplay = Next}          = s{sharedNoteDisplay = NextOverPrev}
-togglePrev s@State{sharedNoteDisplay = PrevOverNext}  = s{sharedNoteDisplay = Next}
-togglePrev s@State{sharedNoteDisplay = NextOverPrev}  = s{sharedNoteDisplay = Next}
+togglePrev state@State{progression = steps, currentRow = cur} =
+  let step@Step{sharedNoteDisplay = disp} = steps !! cur
+      disp' = case disp of
+                ThisOnly     -> Prev
+                Prev         -> ThisOnly
+                Next         -> NextOverPrev
+                PrevOverNext -> Next
+                NextOverPrev -> Next
+  in  state{progression = update cur step{sharedNoteDisplay = disp'} steps}
 
 toggleNext :: State -> State
-toggleNext s@State{sharedNoteDisplay = ThisOnly}      = s{sharedNoteDisplay = Next}
-toggleNext s@State{sharedNoteDisplay = Prev}          = s{sharedNoteDisplay = PrevOverNext}
-toggleNext s@State{sharedNoteDisplay = Next}          = s{sharedNoteDisplay = ThisOnly}
-toggleNext s@State{sharedNoteDisplay = PrevOverNext}  = s{sharedNoteDisplay = Prev}
-toggleNext s@State{sharedNoteDisplay = NextOverPrev}  = s{sharedNoteDisplay = Prev}
+toggleNext state@State{progression = steps, currentRow = cur} =
+  let step@Step{sharedNoteDisplay = disp} = steps !! cur
+      disp' = case disp of
+                ThisOnly     -> Next
+                Prev         -> PrevOverNext
+                Next         -> ThisOnly
+                PrevOverNext -> Prev
+                NextOverPrev -> Prev
+  in  state{progression = update cur step{sharedNoteDisplay = disp'} steps}
 
 quit :: State -> State
 quit state = state{quitting = True}

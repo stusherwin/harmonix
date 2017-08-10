@@ -96,7 +96,7 @@ renderKeys (x0, y0) state = do
     cr = rows state !! currentRow state
     ks = zip (keys state) (notes cr)
     ix = styleIndex cr
-    disp = sharedNoteDisplay state
+    disp = sharedNoteDisplay $ progression state !! currentRow state
     renderKey :: (Key, ScaleRowNote) -> Pos -> Bool -> IO ()
     renderKey (Key{keyNote = C}, ScaleRowNote {sharing = sh}) p isFirst = do
       let c = col WhiteKey sh
@@ -127,12 +127,6 @@ renderKeys (x0, y0) state = do
     renderMarker BlackKey (True, True, True)  = cursorBackward 2 >> cursorUp 1   >> putStr downArrow >> cursorDown 2 >> cursorBackward 1 >> putStr downArrow
     renderMarker _ _                   = return ()
 
--- getRole :: Int -> Int -> Int -> Role
--- getRole curr len i | i == curr = This
---                    | i == (curr - 1 + len) `mod` len = Prev
---                    | i == (curr + 1 + len) `mod` len = Next
---                    | otherwise = None
-
 styleIndexColor :: ColorIntensity -> Int -> Col
 styleIndexColor int 0 = Col int Green
 styleIndexColor int 1 = Col int Cyan
@@ -158,23 +152,22 @@ renderNotes :: Pos -> State -> IO ()
 renderNotes pos state = do
   renderNotes' pos True $ zip prevs rs
   where
-    rs = rows state
+    rs = zip (rows state) (map sharedNoteDisplay $ progression state)
     prevs = last rs : rs
-    disp = sharedNoteDisplay state
-    renderNotes' :: Pos -> Bool -> [(ScaleRow, ScaleRow)] -> IO ()
+    renderNotes' :: Pos -> Bool -> [((ScaleRow, SharedNoteDisplay), (ScaleRow, SharedNoteDisplay))] -> IO ()
     renderNotes' _ _ [] = return ()
-    renderNotes' (x, y) isFirstRow ((prev, this):rest) = do
-      renderNoteRow (x, y) isFirstRow prev this
+    renderNotes' (x, y) isFirstRow (((prev, _), (this, disp)):rest) = do
+      renderNoteRow (x, y) isFirstRow prev this disp
       renderNotes' (x, y + 2) False rest
 
-    renderNoteRow :: Pos -> Bool -> ScaleRow -> ScaleRow -> IO ()
-    renderNoteRow (x, y) isFirstRow prev this = do
+    renderNoteRow :: Pos -> Bool -> ScaleRow -> ScaleRow -> SharedNoteDisplay -> IO ()
+    renderNoteRow (x, y) isFirstRow prev this disp = do
       setCursorPosition y x
-      sequence_ $ map (renderNote isFirstRow prev this) $ (notes prev `zip` notes this)
+      sequence_ $ map (renderNote isFirstRow prev this disp) $ (notes prev `zip` notes this)
   
-    renderNote :: Bool -> ScaleRow -> ScaleRow -> (ScaleRowNote, ScaleRowNote) -> IO ()
-    renderNote isFirstRow prev this (ScaleRowNote {marked = prevMarked}, ScaleRowNote {note = n, marked = m, sharing = sh@(_, inThis, _)}) = do
-      setNoteColor sh m (styleIndex this)
+    renderNote :: Bool -> ScaleRow -> ScaleRow -> SharedNoteDisplay -> (ScaleRowNote, ScaleRowNote) -> IO ()
+    renderNote isFirstRow prev this disp (ScaleRowNote {marked = prevMarked}, ScaleRowNote {note = n, marked = m, sharing = sh@(_, inThis, _)}) = do
+      setNoteColor sh m (styleIndex this) disp
       putStr (pad 3 $ if inThis then show $ n else "")
       setColor (Col Dull White) (Col Dull Black)
       when (isRoot (scale this) n) $ do
@@ -210,8 +203,8 @@ renderNotes pos state = do
       when m $ cursorBackward 3 >> cursorUp 1 >> putStr "──" >> cursorBackward 2 >> cursorDown 2 >> putStr "──" >> cursorUp 1 >> cursorForward 1
       setColor defaultFg defaultBg
   
-    setNoteColor :: (Bool, Bool, Bool) -> Bool -> Int -> IO ()
-    setNoteColor sh marked i =
+    setNoteColor :: (Bool, Bool, Bool) -> Bool -> Int -> SharedNoteDisplay -> IO ()
+    setNoteColor sh marked i disp =
       let bg   = Col Dull Black
           fgIn = if marked then Vivid else Dull
           fg   = noteColor disp i sh fgIn bg
