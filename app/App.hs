@@ -87,7 +87,7 @@ data State = State { quitting :: Bool
                    , sharedNoteDisplay :: SharedNoteDisplay
                    } deriving Eq
 
-data Command = MoveStep Int | RotateStep Int | ToggleScaleChord | CycleSharedNoteDisplay | Quit
+data Command = MoveStep Int | RotateStep Int | ToggleScaleChord | TogglePrev | ToggleNext | Quit
 
 buildKeys :: ScaleRow -> [Key]
 buildKeys row = 
@@ -120,12 +120,19 @@ toggleScaleChord state@State{editField = ef} =
                        _ -> EditScale
   in state{editField = ef'}
 
-cycleSharedNoteDisplay :: State -> State
-cycleSharedNoteDisplay s@State{sharedNoteDisplay = ThisOnly}     = s{sharedNoteDisplay = Prev}
-cycleSharedNoteDisplay s@State{sharedNoteDisplay = Prev}         = s{sharedNoteDisplay = Next}
-cycleSharedNoteDisplay s@State{sharedNoteDisplay = Next}         = s{sharedNoteDisplay = PrevOverNext}
-cycleSharedNoteDisplay s@State{sharedNoteDisplay = PrevOverNext} = s{sharedNoteDisplay = NextOverPrev}
-cycleSharedNoteDisplay s@State{sharedNoteDisplay = NextOverPrev} = s{sharedNoteDisplay = ThisOnly}
+togglePrev :: State -> State
+togglePrev s@State{sharedNoteDisplay = ThisOnly}      = s{sharedNoteDisplay = Prev}
+togglePrev s@State{sharedNoteDisplay = Prev}          = s{sharedNoteDisplay = ThisOnly}
+togglePrev s@State{sharedNoteDisplay = Next}          = s{sharedNoteDisplay = NextOverPrev}
+togglePrev s@State{sharedNoteDisplay = PrevOverNext}  = s{sharedNoteDisplay = Next}
+togglePrev s@State{sharedNoteDisplay = NextOverPrev}  = s{sharedNoteDisplay = Next}
+
+toggleNext :: State -> State
+toggleNext s@State{sharedNoteDisplay = ThisOnly}      = s{sharedNoteDisplay = Next}
+toggleNext s@State{sharedNoteDisplay = Prev}          = s{sharedNoteDisplay = PrevOverNext}
+toggleNext s@State{sharedNoteDisplay = Next}          = s{sharedNoteDisplay = ThisOnly}
+toggleNext s@State{sharedNoteDisplay = PrevOverNext}  = s{sharedNoteDisplay = Prev}
+toggleNext s@State{sharedNoteDisplay = NextOverPrev}  = s{sharedNoteDisplay = Prev}
 
 quit :: State -> State
 quit state = state{quitting = True}
@@ -134,5 +141,6 @@ handleCommand :: Command -> State -> State
 handleCommand (MoveStep delta) = moveStep delta
 handleCommand (RotateStep delta) = rotateStep delta
 handleCommand ToggleScaleChord = toggleScaleChord
-handleCommand CycleSharedNoteDisplay = cycleSharedNoteDisplay
+handleCommand TogglePrev = togglePrev
+handleCommand ToggleNext = toggleNext
 handleCommand Quit = quit

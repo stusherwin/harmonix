@@ -53,7 +53,8 @@ main = do
                       'k' ->  Just $ RotateStep (-1)
                       ';' ->  Just $ RotateStep 1
                       '\t' -> Just $ ToggleScaleChord
-                      ' ' ->  Just $ CycleSharedNoteDisplay
+                      'p' ->  Just $ TogglePrev
+                      'n' ->  Just $ ToggleNext
                       'q' ->  Just $ Quit
                       _   ->  Nothing
         let state' = maybe state (\com -> handleCommand com state) command
