@@ -1,14 +1,14 @@
-name:                haskell-web-test
+name:                harmonix
 version:             0.1.0.0
 -- synopsis:
 -- description:
-homepage:            https://github.com/githubuser/haskell-web-test#readme
+homepage:            https://github.com/stusherwin/harmonix#readme
 license:             BSD3
 license-file:        LICENSE
-author:              Author name here
-maintainer:          example@example.com
-copyright:           2017 Author name here
-category:            Web
+author:              Stu Sherwin
+maintainer:          stu.sherwin@gmail.com
+copyright:           2017 Stu Sherwin
+category:            Console
 build-type:          Simple
 extra-source-files:  README.md
 cabal-version:       >=1.10
@@ -20,25 +20,25 @@ library
                      , ansi-terminal
   default-language:    Haskell2010
 
-executable haskell-web-test-exe
+executable harmonix-exe
   hs-source-dirs:      app
   main-is:             Main.hs
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   other-modules:       App, ConsoleRender
   build-depends:       base
-                     , haskell-web-test
+                     , harmonix
                      , ansi-terminal
   default-language:    Haskell2010
 
-test-suite haskell-web-test-test
+test-suite harmonix-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
   build-depends:       base
-                     , haskell-web-test
+                     , harmonix
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 
 source-repository head
   type:     git
-  location: https://github.com/githubuser/haskell-web-test
+  location: https://github.com/stusherwin/harmonix
